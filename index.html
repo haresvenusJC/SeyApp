@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Visitas - Farmacias</title>
+    <!-- SDK de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f9; color: #333; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h2 { color: #007bff; }
+        h3 { color: #333333; }
+        button { background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
+        button:hover { background: #0056b3; }
+        select, input[type="text"], input[type="file"] { width: 100%; padding: 10px; margin-top: 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .info { color: #007bff; font-weight: bold; }
+        .map-link { display: inline-block; margin-top: 5px; color: #007bff; text-decoration: none; font-weight: bold; }
+        .map-link:hover { text-decoration: underline; }
+        .oculto { display: none; }
+        .preview-img { max-width: 100%; height: auto; margin-top: 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Registro de Visita a Farmacia</h2>
+        <p>Sistema de campo para control de inventarios y visitas.</p>
+        
+        <hr>
+
+        <h3>1. Probar Conexión a Base de Datos</h3>
+        <button onclick="probarConexion()">Verificar Productos de SEY</button>
+        <p id="db-status"></p>
+
+        <hr>
+
+        <h3>2. Capturar Geolocalización</h3>
+        <button onclick="obtenerUbicacion()">Obtener Ubicación Actual</button>
+        <p id="geo-status"></p>
+
+        <hr>
+
+        <h3>3. Identificar Sucursal por Proximidad</h3>
+        <label>Selecciona la Cadena:</label>
+        <select id="select-cadena" onchange="verificarProximidadSucursal()">
+            <option value="">Selecciona la cadena...</option>
+            <option value="Benavides">Farmacias Benavides</option>
+            <option value="Del Ahorro">Farmacias del Ahorro</option>
+            <option value="HEB">HEB</option>
+        </select>
+
+        <div id="contenedor-resultado-proximidad" style="margin-top: 15px;"></div>
+
+        <!-- Formulario oculto en caso de que no exista y deba registrarse (con foto) -->
+        <div id="form-nueva-sucursal" class="oculto" style="margin-top: 15px; background: #e9ecef; padding: 15px; border-radius: 6px;">
+            <p class="info">📍 No hay sucursales registradas a menos de 100m. Da de alta esta nueva ubicación:</p>
+            
+            <label>Nombre Específico de la Sucursal:</label>
+            <input type="text" id="input-nombre-nueva" placeholder="Ej. Benavides Las Torres">
+
+            <label>Foto de la Fachada / Sucursal:</label>
+            <!-- capture="environment" abre la cámara trasera directamente en celulares -->
+            <input type="file" id="input-foto-sucursal" accept="image/*" capture="environment" onchange="mostrarVistaPrevia(event)">
+            <div id="contenedor-preview"></div>
+
+            <button onclick="registrarNuevaSucursal()" style="background: #28a745; margin-top: 15px;">Guardar y Seleccionar Sucursal</button>
+        </div>
+        
+        <p id="sucursal-status"></p>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://snjvdfjouoxnaopgeral.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuanZkZmpvdW94bmFvcGdlcmFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTI2MzEsImV4cCI6MjEwMDc2ODYzMX0.CIrxhWZtySmv42iZfFGHgyavP6uxA44kbbBQlQNc8uc';
+        
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        window.currentLat = null;
+        window.currentLon = null;
+        window.sucursalSeleccionadaId = null;
+
+        async function probarConexion() {
+            const dbStatus = document.getElementById('db-status');
+            dbStatus.innerText = 'Consultando la base de datos...';
+            
+            try {
+                const { data, error } = await supabaseClient.from('productos').select('*').limit(5);
+                if (error) throw error;
+                dbStatus.innerHTML = `<span class="success">¡Conexión exitosa! Productos SEY listos.</span>`;
+            } catch (err) {
+                dbStatus.innerHTML = `<span class="error">Error de conexión: ${err.message}</span>`;
+            }
+        }
+
+        function obtenerUbicacion() {
+            const statusText = document.getElementById('geo-status');
+            if (!navigator.geolocation) {
+                statusText.innerHTML = '<span class="error">Tu navegador no soporta geolocalización.</span>';
+                return;
+            }
+
+            statusText.innerText = 'Obteniendo ubicación GPS...';
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    window.currentLat = position.coords.latitude;
+                    window.currentLon = position.coords.longitude;
+                    
+                    const mapsUrl = `https://www.google.com/maps?q=${window.currentLat},${window.currentLon}`;
+                    statusText.innerHTML = `<span class="success">Ubicación capturada: Lat ${window.currentLat.toFixed(4)}, Lon ${window.currentLon.toFixed(4)}</span><br>` +
+                                           `<a class="map-link" href="${mapsUrl}" target="_blank">🗺️ Ver en Google Maps</a>`;
+                    
+                    verificarProximidadSucursal();
+                },
+                () => {
+                    statusText.innerHTML = '<span class="error">No se pudo obtener la ubicación. Permite el acceso GPS.</span>';
+                },
+                { enableHighAccuracy: true }
+            );
+        }
+
+        function calcularDistanciaMetros(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        async function verificarProximidadSucursal() {
+            const cadena = document.getElementById('select-cadena').value;
+            const resultadoDiv = document.getElementById('contenedor-resultado-proximidad');
+            const formNueva = document.getElementById('form-nueva-sucursal');
+            
+            formNueva.classList.add('oculto');
+            window.sucursalSeleccionadaId = null;
+
+            if (!cadena) {
+                resultadoDiv.innerHTML = '';
+                return;
+            }
+
+            if (!window.currentLat || !window.currentLon) {
+                resultadoDiv.innerHTML = '<span class="error">⚠️ Primero debes obtener tu ubicación GPS (Paso 2).</span>';
+                return;
+            }
+
+            resultadoDiv.innerText = 'Buscando sucursales cercanas en la base de datos...';
+
+            try {
+                const { data, error } = await supabaseClient
+                    .from('sucursales')
+                    .select('*')
+                    .ilike('nombre_sucursal', `%${cadena}%`);
+
+                if (error) throw error;
+
+                let sucursalCercana = null;
+                let menorDistancia = Infinity;
+
+                if (data && data.length > 0) {
+                    data.forEach(suc => {
+                        const matchLat = suc.direccion.match(/Lat:\s*([-\d.]+)/);
+                        const matchLon = suc.direccion.match(/Lon:\s*([-\d.]+)/);
+
+                        if (matchLat && matchLon) {
+                            const latDb = parseFloat(matchLat[1]);
+                            const lonDb = parseFloat(matchLon[1]);
+                            const distancia = calcularDistanciaMetros(window.currentLat, window.currentLon, latDb, lonDb);
+
+                            if (distancia < menorDistancia) {
+                                menorDistancia = distancia;
+                                sucursalCercana = suc;
+                            }
+                        }
+                    });
+                }
+
+                if (sucursalCercana && menorDistancia <= 100) {
+                    window.sucursalSeleccionadaId = sucursalCercana.id;
+                    resultadoDiv.innerHTML = `<span class="success">✅ Sucursal detectada cercana (${Math.round(menorDistancia)}m):</span><br>` +
+                                             `<b>${sucursalCercana.nombre_sucursal}</b>`;
+                } else {
+                    resultadoDiv.innerHTML = `<span class="error">No se encontró ninguna sucursal registrada a menos de 100 metros.</span>`;
+                    formNueva.classList.remove('oculto');
+                }
+
+            } catch (err) {
+                resultadoDiv.innerHTML = `<span class="error">Error al verificar proximidad: ${err.message}</span>`;
+            }
+        }
+
+        // Mostrar vista previa de la foto tomada
+        function mostrarVistaPrevia(event) {
+            const archivo = event.target.files[0];
+            const contenedor = document.getElementById('contenedor-preview');
+            contenedor.innerHTML = '';
+
+            if (archivo) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    contenedor.innerHTML = `<img src="${e.target.result}" class="preview-img" alt="Vista previa">`;
+                }
+                reader.readAsDataURL(archivo);
+            }
+        }
+
+        // Registrar nueva sucursal subiendo la foto a Supabase Storage
+        async function registrarNuevaSucursal() {
+            const cadena = document.getElementById('select-cadena').value;
+            const nombreEspecifico = document.getElementById('input-nombre-nueva').value.trim();
+            const inputFoto = document.getElementById('input-foto-sucursal');
+            const status = document.getElementById('sucursal-status');
+
+            if (!nombreEspecifico) {
+                alert('Escribe el nombre específico de la sucursal.');
+                return;
+            }
+
+            status.innerText = 'Procesando registro y subiendo foto...';
+
+            try {
+                let fotoUrl = null;
+
+                // Si seleccionó/tomó una foto, la subimos al Storage
+                if (inputFoto.files && inputFoto.files[0]) {
+                    const archivo = inputFoto.files[0];
+                    const nombreArchivo = `${Date.now()}_${archivo.name.replace(/\s+/g, '_')}`;
+
+                    const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                        .from('sucursales-fotos')
+                        .upload(nombreArchivo, archivo);
+
+                    if (uploadError) throw uploadError;
+
+                    // Obtenemos la URL pública de la imagen almacenada
+                    const { data: publicData } = supabaseClient.storage
+                        .from('sucursales-fotos')
+                        .getPublicUrl(nombreArchivo);
+
+                    fotoUrl = publicData.publicUrl;
+                }
+
+                const nombreCompleto = `${cadena} - ${nombreEspecifico}`;
+                // Si tu tabla de sucursales tiene una columna para foto, se adjunta. 
+                // Si la guardas dentro de la dirección o en una columna dedicada, se incluye aquí:
+                const direccionCompleta = `Ubicación de Campo (Lat: ${window.currentLat.toFixed(4)}, Lon: ${window.currentLon.toFixed(4)})${fotoUrl ? ' | Foto: ' + fotoUrl : ''}`;
+
+                const { data, error } = await supabaseClient
+                    .from('sucursales')
+                    .insert([{ 
+                        nombre_sucursal: nombreCompleto, 
+                        direccion: direccionCompleta,
+                        cadena: cadena 
+                    }])
+                    .select();
+
+                if (error) throw error;
+
+                window.sucursalSeleccionadaId = data[0].id;
+                status.innerHTML = `<span class="success">¡Sucursal "${nombreCompleto}" dada de alta con foto y seleccionada con éxito!</span>`;
+                document.getElementById('form-nueva-sucursal').classList.add('oculto');
+                document.getElementById('contenedor-resultado-proximidad').innerHTML = `<span class="success">✅ Sucursal activa: <b>${nombreCompleto}</b></span>`;
+
+            } catch (err) {
+                status.innerHTML = `<span class="error">Error al guardar sucursal: ${err.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>
