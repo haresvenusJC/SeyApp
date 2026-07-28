@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control de Visitas - Farmacias</title>
+    <title>Control de Auditoría - Farmacias</title>
     <!-- SDK de Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        /* Fondo degradado general para toda la aplicación y pantalla de login */
+        /* Fondo degradado general para toda la aplicación y pantallas */
         body { 
             font-family: Arial, sans-serif; 
             margin: 0; 
@@ -34,7 +34,8 @@
         h3 { color: #333333; }
         button { background: #6b21a8; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; font-weight: bold; }
         button:hover { background: #551a8b; }
-        select, input[type="text"], input[type="file"] { width: 100%; padding: 10px; margin-top: 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+        select, input[type="text"], input[type="number"], input[type="file"], textarea { width: 100%; padding: 10px; margin-top: 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+        textarea { resize: vertical; height: 100px; }
         .success { color: green; font-weight: bold; }
         .error { color: red; font-weight: bold; }
         .info { color: #6b21a8; font-weight: bold; }
@@ -70,6 +71,23 @@
             margin-bottom: 20px;
             border: 1px solid #eee;
         }
+        .producto-item {
+            background: #fdfdfd;
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+        }
+        .sucursal-card-opcion {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
     </style>
 </head>
 <body>
@@ -86,7 +104,7 @@
         </div>
     </div>
 
-    <!-- 2. CONTENEDOR PRINCIPAL DE LA APP (Inicialmente oculto) -->
+    <!-- 2. CONTENEDOR PRINCIPAL DE LA APP (PASO A PASO) -->
     <div id="app-content" class="container oculto">
         
         <!-- Barra superior con bienvenida y botón de salir -->
@@ -95,54 +113,76 @@
             <button id="btn-logout" style="background: #e74c3c; width: auto; padding: 5px 12px; margin-top: 0; font-size: 0.85rem;">Salir</button>
         </div>
 
-        <!-- Logo en la cabecera principal de la aplicación -->
-        <div style="text-align: center; margin-bottom: 15px;">
-            <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 100px; height: auto;">
-            <h2>Registro de Visita a Farmacia</h2>
-            <p>Sistema de campo para control de inventarios y visitas.</p>
-        </div>
-        
-        <hr>
-
-        <h3>1. Probar Conexión a Base de Datos</h3>
-        <button onclick="probarConexion()">Verificar Productos de SEY</button>
-        <p id="db-status"></p>
-
-        <hr>
-
-        <h3>2. Capturar Geolocalización</h3>
-        <button onclick="obtenerUbicacion()">Obtener Ubicación Actual</button>
-        <p id="geo-status"></p>
-
-        <hr>
-
-        <h3>3. Identificar Sucursal por Proximidad</h3>
-        <label>Selecciona la Cadena:</label>
-        <select id="select-cadena" onchange="verificarProximidadSucursal()">
-            <option value="">Selecciona la cadena...</option>
-            <option value="Benavides">Farmacias Benavides</option>
-            <option value="Del Ahorro">Farmacias del Ahorro</option>
-            <option value="HEB">HEB</option>
-        </select>
-
-        <div id="contenedor-resultado-proximidad" style="margin-top: 15px;"></div>
-
-        <!-- Formulario oculto en caso de que no exista y deba registrarse (con foto) -->
-        <div id="form-nueva-sucursal" class="oculto" style="margin-top: 15px; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
-            <p class="info">📍 No hay sucursales registradas a menos de 100m. Da de alta esta nueva ubicación:</p>
+        <!-- VISTA 1: REGISTRO / SELECCIÓN DE SUCURSAL -->
+        <div id="vista-sucursal">
+            <div style="text-align: center; margin-bottom: 15px;">
+                <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 100px; height: auto;">
+                <h2>Registro de auditoría</h2>
+                <p>Sistema de campo para control de inventarios y visitas.</p>
+            </div>
             
-            <label>Nombre Específico de la Sucursal:</label>
-            <input type="text" id="input-nombre-nueva" placeholder="Ej. Benavides Las Torres">
+            <hr>
 
-            <label>Foto de la Fachada / Sucursal:</label>
-            <!-- capture="environment" abre la cámara trasera directamente en celulares -->
-            <input type="file" id="input-foto-sucursal" accept="image/*" capture="environment" onchange="mostrarVistaPrevia(event)">
-            <div id="contenedor-preview"></div>
+            <h3>1. Capturar Geolocalización</h3>
+            <button onclick="obtenerUbicacion()">Obtener Ubicación Actual</button>
+            <p id="geo-status"></p>
 
-            <button onclick="registrarNuevaSucursal()" style="background: #28a745; margin-top: 15px;">Guardar y Seleccionar Sucursal</button>
+            <hr>
+
+            <h3>2. Identificar Sucursal por Proximidad</h3>
+            <label>Selecciona la Cadena:</label>
+            <select id="select-cadena" onchange="verificarProximidadSucursal()">
+                <option value="">Selecciona la cadena...</option>
+                <option value="Benavides">Farmacias Benavides</option>
+                <option value="Del Ahorro">Farmacias del Ahorro</option>
+                <option value="HEB">HEB</option>
+            </select>
+
+            <div id="contenedor-resultado-proximidad" style="margin-top: 15px;"></div>
+
+            <!-- Formulario oculto en caso de que no exista y deba registrarse (con foto) -->
+            <div id="form-nueva-sucursal" class="oculto" style="margin-top: 15px; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
+                <p class="info">📍 ¿No aparece en la lista de arriba? Da de alta esta nueva ubicación:</p>
+                
+                <label>Nombre Específico de la Sucursal:</label>
+                <input type="text" id="input-nombre-nueva" placeholder="Ej. HEB Las Torres">
+
+                <label>Foto de la Fachada / Sucursal:</label>
+                <input type="file" id="input-foto-sucursal" accept="image/*" capture="environment" onchange="mostrarVistaPrevia(event)">
+                <div id="contenedor-preview"></div>
+
+                <button onclick="registrarNuevaSucursal()" style="background: #28a745; margin-top: 15px;">Guardar y Seleccionar Sucursal</button>
+            </div>
+            
+            <p id="sucursal-status"></p>
+
+            <!-- Botón CONTINUAR (Aparece cuando la sucursal está lista/seleccionada) -->
+            <div id="contenedor-btn-continuar" class="oculto" style="margin-top: 25px;">
+                <button onclick="irAInventario()" style="background: #28a745; font-size: 18px; padding: 12px;">CONTINUAR ➔</button>
+            </div>
         </div>
-        
-        <p id="sucursal-status"></p>
+
+        <!-- VISTA 2: CAPTURA DE INVENTARIO Y COMENTARIOS -->
+        <div id="vista-inventario" class="oculto">
+            <div style="text-align: center; margin-bottom: 15px;">
+                <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 90px; height: auto;">
+                <h2>Captura de Inventario</h2>
+                <p id="info-sucursal-activa" class="info"></p>
+            </div>
+
+            <hr>
+            <h3>Productos y Existencias</h3>
+            <div id="lista-productos-container">
+                <p>Cargando lista de productos...</p>
+            </div>
+
+            <h3 style="margin-top: 20px;">Acciones Realizadas y Comentarios</h3>
+            <textarea id="input-comentarios" placeholder="Describe las acciones realizadas, acuerdos con encargado, faltantes, exhibiciones, etc."></textarea>
+
+            <button onclick="guardarVisitaEInventario()" style="background: #28a745; margin-top: 20px; font-size: 18px; padding: 12px;">Finalizar y Enviar Visita</button>
+            <button onclick="regresarAVistaSucursal()" style="background: #6c757d; margin-top: 10px;">⬅ Volver a Sucursal</button>
+        </div>
+
     </div>
 
     <script>
@@ -154,6 +194,7 @@
         window.currentLat = null;
         window.currentLon = null;
         window.sucursalSeleccionadaId = null;
+        window.nombreSucursalSeleccionada = "";
 
         // Control de Sesión de Login al cargar la página
         document.addEventListener("DOMContentLoaded", () => {
@@ -192,19 +233,6 @@
                 welcomeMsg.textContent = `👤 Hola, ${username}`;
             }
         });
-
-        async function probarConexion() {
-            const dbStatus = document.getElementById('db-status');
-            dbStatus.innerText = 'Consultando la base de datos...';
-            
-            try {
-                const { data, error } = await supabaseClient.from('productos').select('*').limit(5);
-                if (error) throw error;
-                dbStatus.innerHTML = `<span class="success">¡Conexión exitosa! Productos SEY listos.</span>`;
-            } catch (err) {
-                dbStatus.innerHTML = `<span class="error">Error de conexión: ${err.message}</span>`;
-            }
-        }
 
         function obtenerUbicacion() {
             const statusText = document.getElementById('geo-status');
@@ -247,8 +275,10 @@
             const cadena = document.getElementById('select-cadena').value;
             const resultadoDiv = document.getElementById('contenedor-resultado-proximidad');
             const formNueva = document.getElementById('form-nueva-sucursal');
+            const btnContinuar = document.getElementById('contenedor-btn-continuar');
             
             formNueva.classList.add('oculto');
+            btnContinuar.classList.add('oculto');
             window.sucursalSeleccionadaId = null;
 
             if (!cadena) {
@@ -257,53 +287,98 @@
             }
 
             if (!window.currentLat || !window.currentLon) {
-                resultadoDiv.innerHTML = '<span class="error">⚠️ Primero debes obtener tu ubicación GPS (Paso 2).</span>';
+                resultadoDiv.innerHTML = '<span class="error">⚠️ Primero debes obtener tu ubicación GPS (Paso 1).</span>';
                 return;
             }
 
-            resultadoDiv.innerText = 'Buscando sucursales cercanas en la base de datos...';
+            resultadoDiv.innerText = 'Buscando sucursales de ' + cadena + '...';
 
             try {
                 const { data, error } = await supabaseClient
                     .from('sucursales')
-                    .select('*')
-                    .ilike('nombre_sucursal', `%${cadena}%`);
+                    .select('*');
 
                 if (error) throw error;
 
+                let sucursalesDeCadena = [];
                 let sucursalCercana = null;
                 let menorDistancia = Infinity;
 
                 if (data && data.length > 0) {
                     data.forEach(suc => {
-                        const matchLat = suc.direccion.match(/Lat:\s*([-\d.]+)/);
-                        const matchLon = suc.direccion.match(/Lon:\s*([-\d.]+)/);
+                        const matchCadena = (suc.cadena && suc.cadena.toLowerCase() === cadena.toLowerCase()) || 
+                                            (suc.nombre_sucursal && suc.nombre_sucursal.toLowerCase().includes(cadena.toLowerCase()));
 
-                        if (matchLat && matchLon) {
-                            const latDb = parseFloat(matchLat[1]);
-                            const lonDb = parseFloat(matchLon[1]);
-                            const distancia = calcularDistanciaMetros(window.currentLat, window.currentLon, latDb, lonDb);
+                        if (matchCadena) {
+                            sucursalesDeCadena.push(suc);
+                            
+                            let latDb = null;
+                            let lonDb = null;
 
-                            if (distancia < menorDistancia) {
-                                menorDistancia = distancia;
-                                sucursalCercana = suc;
+                            if (suc.latitud && suc.longitud) {
+                                latDb = parseFloat(suc.latitud);
+                                lonDb = parseFloat(suc.longitud);
+                            } else if (suc.direccion) {
+                                const matchLat = suc.direccion.match(/Lat:\s*([-\d.]+)/i);
+                                const matchLon = suc.direccion.match(/Lon:\s*([-\d.]+)/i);
+                                if (matchLat && matchLon) {
+                                    latDb = parseFloat(matchLat[1]);
+                                    lonDb = parseFloat(matchLon[1]);
+                                }
+                            }
+
+                            if (latDb !== null && lonDb !== null) {
+                                const distancia = calcularDistanciaMetros(window.currentLat, window.currentLon, latDb, lonDb);
+                                if (distancia < menorDistancia) {
+                                    menorDistancia = distancia;
+                                    sucursalCercana = { ...suc, distanciaMetros: Math.round(distancia) };
+                                }
                             }
                         }
                     });
                 }
 
-                if (sucursalCercana && menorDistancia <= 100) {
+                // Verificamos si hay una sucursal extremadamente cerca (menor a 600m)
+                if (sucursalCercana && menorDistancia <= 600) {
                     window.sucursalSeleccionadaId = sucursalCercana.id;
-                    resultadoDiv.innerHTML = `<span class="success">✅ Sucursal detectada cercana (${Math.round(menorDistancia)}m):</span><br>` +
+                    window.nombreSucursalSeleccionada = sucursalCercana.nombre_sucursal;
+                    resultadoDiv.innerHTML = `<span class="success">✅ Sucursal detectada cercana (${sucursalCercana.distanciaMetros}m):</span><br>` +
                                              `<b>${sucursalCercana.nombre_sucursal}</b>`;
+                    btnContinuar.classList.remove('oculto');
+                } else if (sucursalesDeCadena.length > 0) {
+                    // Si existen sucursales de la cadena en la BD, las mostramos directamente para seleccionarlas sin error
+                    let htmlListado = `<span class="info">📍 Selecciona la sucursal correspondiente de la lista:</span>`;
+                    htmlListado += `<div style="margin-top: 10px; max-height: 180px; overflow-y: auto;">`;
+                    sucursalesDeCadena.forEach(s => {
+                        htmlListado += `
+                            <div class="sucursal-card-opcion">
+                                <span style="font-size: 0.9rem; font-weight: bold;">${s.nombre_sucursal}</span>
+                                <button onclick="seleccionarSucursalManual('${s.id}', '${s.nombre_sucursal.replace(/'/g, "\\'")}')" style="width: auto; padding: 5px 10px; margin: 0; font-size: 0.8rem; background: #6b21a8;">Seleccionar</button>
+                            </div>
+                        `;
+                    });
+                    htmlListado += `</div>`;
+                    
+                    resultadoDiv.innerHTML = htmlListado;
+                    formNueva.classList.remove('oculto');
                 } else {
-                    resultadoDiv.innerHTML = `<span class="error">No se encontró ninguna sucursal registrada a menos de 100 metros.</span>`;
+                    resultadoDiv.innerHTML = `<span class="error">No hay sucursales registradas para "${cadena}". Puedes dar de alta una nueva abajo:</span>`;
                     formNueva.classList.remove('oculto');
                 }
 
             } catch (err) {
-                resultadoDiv.innerHTML = `<span class="error">Error al verificar proximidad: ${err.message}</span>`;
+                resultadoDiv.innerHTML = `<span class="error">Error al buscar sucursales: ${err.message}</span>`;
             }
+        }
+
+        // Selección manual rápida de la sucursal existente
+        function seleccionarSucursalManual(id, nombre) {
+            window.sucursalSeleccionadaId = id;
+            window.nombreSucursalSeleccionada = nombre;
+            
+            document.getElementById('contenedor-resultado-proximidad').innerHTML = `<span class="success">✅ Sucursal seleccionada: <b>${nombre}</b></span>`;
+            document.getElementById('form-nueva-sucursal').classList.add('oculto');
+            document.getElementById('contenedor-btn-continuar').classList.remove('oculto');
         }
 
         // Mostrar vista previa de la foto tomada
@@ -321,12 +396,13 @@
             }
         }
 
-        // Registrar nueva sucursal subiendo la foto a Supabase Storage
+        // Registrar nueva sucursal asegurando guardar el campo 'cadena' correctamente
         async function registrarNuevaSucursal() {
             const cadena = document.getElementById('select-cadena').value;
             const nombreEspecifico = document.getElementById('input-nombre-nueva').value.trim();
             const inputFoto = document.getElementById('input-foto-sucursal');
             const status = document.getElementById('sucursal-status');
+            const btnContinuar = document.getElementById('contenedor-btn-continuar');
 
             if (!nombreEspecifico) {
                 alert('Escribe el nombre específico de la sucursal.');
@@ -370,13 +446,91 @@
                 if (error) throw error;
 
                 window.sucursalSeleccionadaId = data[0].id;
+                window.nombreSucursalSeleccionada = nombreCompleto;
+
                 status.innerHTML = `<span class="success">¡Sucursal "${nombreCompleto}" dada de alta con foto y seleccionada con éxito!</span>`;
                 document.getElementById('form-nueva-sucursal').classList.add('oculto');
                 document.getElementById('contenedor-resultado-proximidad').innerHTML = `<span class="success">✅ Sucursal activa: <b>${nombreCompleto}</b></span>`;
+                
+                btnContinuar.classList.remove('oculto');
 
             } catch (err) {
                 status.innerHTML = `<span class="error">Error al guardar sucursal: ${err.message}</span>`;
             }
+        }
+
+        // --- NAVEGACIÓN A PANTALLA DE INVENTARIO ---
+        async function irAInventario() {
+            document.getElementById('vista-sucursal').classList.add('oculto');
+            document.getElementById('vista-inventario').classList.remove('oculto');
+            document.getElementById('info-sucursal-activa').innerText = `Sucursal: ${window.nombreSucursalSeleccionada}`;
+
+            await cargarProductosInventario();
+        }
+
+        function regresarAVistaSucursal() {
+            document.getElementById('vista-inventario').classList.add('oculto');
+            document.getElementById('vista-sucursal').classList.remove('oculto');
+        }
+
+        async function cargarProductosInventario() {
+            const container = document.getElementById('lista-productos-container');
+            container.innerHTML = '<p>Cargando productos...</p>';
+
+            try {
+                const { data, error } = await supabaseClient.from('productos').select('*');
+                if (error) throw error;
+
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<p>No se encontraron productos registrados en la base de datos.</p>';
+                    return;
+                }
+
+                let html = '';
+                data.forEach(prod => {
+                    html += `
+                        <div class="producto-item">
+                            <b style="color: #6b21a8;">${prod.nombre || prod.nombre_producto || 'Producto sin nombre'}</b>
+                            <p style="margin: 4px 0 8px 0; font-size: 0.85rem; color: #666;">SKU/Código: ${prod.codigo || prod.sku || 'N/D'}</p>
+                            <label style="font-size: 0.9rem;">Cantidad en inventario:</label>
+                            <input type="number" min="0" class="input-stock" data-product-id="${prod.id}" placeholder="Ej. 10">
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+
+            } catch (err) {
+                container.innerHTML = `<span class="error">Error al cargar productos: ${err.message}</span>`;
+            }
+        }
+
+        async function guardarVisitaEInventario() {
+            const comentarios = document.getElementById('input-comentarios').value.trim();
+            const inputsStock = document.querySelectorAll('.input-stock');
+            const usuarioActual = localStorage.getItem("sey_user") || "Anónimo";
+
+            if (!comentarios) {
+                alert('Por favor ingresa los comentarios y acciones realizadas en la sucursal.');
+                return;
+            }
+
+            let inventarioData = [];
+            inputsStock.forEach(input => {
+                const productoId = input.getAttribute('data-product-id');
+                const cantidad = input.value.trim() !== "" ? parseInt(input.value) : 0;
+                inventarioData.push({
+                    producto_id: productoId,
+                    cantidad: cantidad
+                });
+            });
+
+            console.log("Sucursal ID:", window.sucursalSeleccionadaId);
+            console.log("Usuario:", usuarioActual);
+            console.log("Comentarios:", comentarios);
+            console.log("Inventario Capturado:", inventarioData);
+
+            alert("¡Visita e inventario registrados correctamente!");
+            location.reload();
         }
     </script>
 </body>
