@@ -7,26 +7,100 @@
     <!-- SDK de Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f4f4f9; color: #333; }
-        .container { max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h2 { color: #007bff; }
+        /* Fondo degradado general para toda la aplicación y pantalla de login */
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            min-height: 100vh;
+            background: linear-gradient(135deg, #e6007e, #6b21a8);
+            background-attachment: fixed;
+            color: #333; 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container { 
+            width: 100%;
+            max-width: 600px; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2); 
+        }
+
+        h2 { color: #6b21a8; margin-top: 0; }
         h3 { color: #333333; }
-        button { background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; }
-        button:hover { background: #0056b3; }
+        button { background: #6b21a8; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; font-weight: bold; }
+        button:hover { background: #551a8b; }
         select, input[type="text"], input[type="file"] { width: 100%; padding: 10px; margin-top: 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
         .success { color: green; font-weight: bold; }
         .error { color: red; font-weight: bold; }
-        .info { color: #007bff; font-weight: bold; }
-        .map-link { display: inline-block; margin-top: 5px; color: #007bff; text-decoration: none; font-weight: bold; }
+        .info { color: #6b21a8; font-weight: bold; }
+        .map-link { display: inline-block; margin-top: 5px; color: #6b21a8; text-decoration: none; font-weight: bold; }
         .map-link:hover { text-decoration: underline; }
         .oculto { display: none; }
         .preview-img { max-width: 100%; height: auto; margin-top: 10px; border-radius: 4px; }
+        
+        /* Estilos pantalla de Login */
+        #login-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+        .login-card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            text-align: center;
+            width: 90%;
+            max-width: 350px;
+        }
+        .app-header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #eee;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>Registro de Visita a Farmacia</h2>
-        <p>Sistema de campo para control de inventarios y visitas.</p>
+
+    <!-- 1. PANTALLA DE LOGIN / BIENVENIDA -->
+    <div id="login-screen">
+        <div class="login-card">
+            <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 120px; height: auto; margin-bottom: 15px;">
+            <h2 style="margin-bottom: 5px; color: #333;">¡Bienvenido a Sey!</h2>
+            <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Ingresa tu nombre para continuar</p>
+            
+            <input type="text" id="user-name" placeholder="Tu Nombre o Usuario">
+            <button id="btn-login" style="margin-top: 15px;">Entrar a la App</button>
+        </div>
+    </div>
+
+    <!-- 2. CONTENEDOR PRINCIPAL DE LA APP (Inicialmente oculto) -->
+    <div id="app-content" class="container oculto">
+        
+        <!-- Barra superior con bienvenida y botón de salir -->
+        <div class="app-header-bar">
+            <span id="welcome-msg" style="font-weight: bold; color: #444;"></span>
+            <button id="btn-logout" style="background: #e74c3c; width: auto; padding: 5px 12px; margin-top: 0; font-size: 0.85rem;">Salir</button>
+        </div>
+
+        <!-- Logo en la cabecera principal de la aplicación -->
+        <div style="text-align: center; margin-bottom: 15px;">
+            <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 100px; height: auto;">
+            <h2>Registro de Visita a Farmacia</h2>
+            <p>Sistema de campo para control de inventarios y visitas.</p>
+        </div>
         
         <hr>
 
@@ -54,7 +128,7 @@
         <div id="contenedor-resultado-proximidad" style="margin-top: 15px;"></div>
 
         <!-- Formulario oculto en caso de que no exista y deba registrarse (con foto) -->
-        <div id="form-nueva-sucursal" class="oculto" style="margin-top: 15px; background: #e9ecef; padding: 15px; border-radius: 6px;">
+        <div id="form-nueva-sucursal" class="oculto" style="margin-top: 15px; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
             <p class="info">📍 No hay sucursales registradas a menos de 100m. Da de alta esta nueva ubicación:</p>
             
             <label>Nombre Específico de la Sucursal:</label>
@@ -80,6 +154,44 @@
         window.currentLat = null;
         window.currentLon = null;
         window.sucursalSeleccionadaId = null;
+
+        // Control de Sesión de Login al cargar la página
+        document.addEventListener("DOMContentLoaded", () => {
+            const loginScreen = document.getElementById("login-screen");
+            const appContent = document.getElementById("app-content");
+            const btnLogin = document.getElementById("btn-login");
+            const btnLogout = document.getElementById("btn-logout");
+            const inputUserName = document.getElementById("user-name");
+            const welcomeMsg = document.getElementById("welcome-msg");
+
+            const savedUser = localStorage.getItem("sey_user");
+            if (savedUser) {
+                showApp(savedUser);
+            }
+
+            btnLogin.addEventListener("click", () => {
+                const name = inputUserName.value.trim();
+                if (name === "") {
+                    alert("Por favor ingresa tu nombre");
+                    return;
+                }
+                localStorage.setItem("sey_user", name);
+                showApp(name);
+            });
+
+            btnLogout.addEventListener("click", () => {
+                localStorage.removeItem("sey_user");
+                appContent.classList.add("oculto");
+                loginScreen.style.display = "flex";
+                inputUserName.value = "";
+            });
+
+            function showApp(username) {
+                loginScreen.style.display = "none";
+                appContent.classList.remove("oculto");
+                welcomeMsg.textContent = `👤 Hola, ${username}`;
+            }
+        });
 
         async function probarConexion() {
             const dbStatus = document.getElementById('db-status');
@@ -226,7 +338,6 @@
             try {
                 let fotoUrl = null;
 
-                // Si seleccionó/tomó una foto, la subimos al Storage
                 if (inputFoto.files && inputFoto.files[0]) {
                     const archivo = inputFoto.files[0];
                     const nombreArchivo = `${Date.now()}_${archivo.name.replace(/\s+/g, '_')}`;
@@ -237,7 +348,6 @@
 
                     if (uploadError) throw uploadError;
 
-                    // Obtenemos la URL pública de la imagen almacenada
                     const { data: publicData } = supabaseClient.storage
                         .from('sucursales-fotos')
                         .getPublicUrl(nombreArchivo);
@@ -246,8 +356,6 @@
                 }
 
                 const nombreCompleto = `${cadena} - ${nombreEspecifico}`;
-                // Si tu tabla de sucursales tiene una columna para foto, se adjunta. 
-                // Si la guardas dentro de la dirección o en una columna dedicada, se incluye aquí:
                 const direccionCompleta = `Ubicación de Campo (Lat: ${window.currentLat.toFixed(4)}, Lon: ${window.currentLon.toFixed(4)})${fotoUrl ? ' | Foto: ' + fotoUrl : ''}`;
 
                 const { data, error } = await supabaseClient
