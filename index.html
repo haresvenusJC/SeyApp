@@ -133,8 +133,8 @@
             <label>Selecciona la Cadena:</label>
             <select id="select-cadena" onchange="verificarProximidadSucursal()">
                 <option value="">Selecciona la cadena...</option>
-                <option value="Benavides">Farmacias Benavides</option>
-                <option value="Del Ahorro">Farmacias del Ahorro</option>
+                <option value="BENAVIDES">Farmacias Benavides</option>
+                <option value="DEL AHORRO">Farmacias del Ahorro</option>
                 <option value="HEB">HEB</option>
             </select>
 
@@ -195,6 +195,7 @@
         window.currentLon = null;
         window.sucursalSeleccionadaId = null;
         window.nombreSucursalSeleccionada = "";
+        window.cadenaActiva = ""; // Almacenará la cadena seleccionada para filtrar productos
 
         // Control de Sesión de Login al cargar la página
         document.addEventListener("DOMContentLoaded", () => {
@@ -273,6 +274,7 @@
 
         async function verificarProximidadSucursal() {
             const cadena = document.getElementById('select-cadena').value;
+            window.cadenaActiva = cadena; // Guardar la cadena seleccionada globalmente
             const resultadoDiv = document.getElementById('contenedor-resultado-proximidad');
             const formNueva = document.getElementById('form-nueva-sucursal');
             const btnContinuar = document.getElementById('contenedor-btn-continuar');
@@ -307,7 +309,7 @@
                 if (data && data.length > 0) {
                     data.forEach(suc => {
                         const matchCadena = (suc.cadena && suc.cadena.toLowerCase() === cadena.toLowerCase()) || 
-                                            (suc.nombre_sucursal && suc.nombre_sucursal.toLowerCase().includes(cadena.toLowerCase()));
+                                          (suc.nombre_sucursal && suc.nombre_sucursal.toLowerCase().includes(cadena.toLowerCase()));
 
                         if (matchCadena) {
                             sucursalesDeCadena.push(suc);
@@ -338,7 +340,6 @@
                     });
                 }
 
-                // Verificamos si hay una sucursal extremadamente cerca (menor a 600m)
                 if (sucursalCercana && menorDistancia <= 600) {
                     window.sucursalSeleccionadaId = sucursalCercana.id;
                     window.nombreSucursalSeleccionada = sucursalCercana.nombre_sucursal;
@@ -346,7 +347,6 @@
                                              `<b>${sucursalCercana.nombre_sucursal}</b>`;
                     btnContinuar.classList.remove('oculto');
                 } else if (sucursalesDeCadena.length > 0) {
-                    // Si existen sucursales de la cadena en la BD, las mostramos directamente para seleccionarlas sin error
                     let htmlListado = `<span class="info">📍 Selecciona la sucursal correspondiente de la lista:</span>`;
                     htmlListado += `<div style="margin-top: 10px; max-height: 180px; overflow-y: auto;">`;
                     sucursalesDeCadena.forEach(s => {
@@ -371,7 +371,6 @@
             }
         }
 
-        // Selección manual rápida de la sucursal existente
         function seleccionarSucursalManual(id, nombre) {
             window.sucursalSeleccionadaId = id;
             window.nombreSucursalSeleccionada = nombre;
@@ -381,7 +380,6 @@
             document.getElementById('contenedor-btn-continuar').classList.remove('oculto');
         }
 
-        // Mostrar vista previa de la foto tomada
         function mostrarVistaPrevia(event) {
             const archivo = event.target.files[0];
             const contenedor = document.getElementById('contenedor-preview');
@@ -396,7 +394,6 @@
             }
         }
 
-        // Registrar nueva sucursal asegurando guardar el campo 'cadena' correctamente
         async function registrarNuevaSucursal() {
             const cadena = document.getElementById('select-cadena').value;
             const nombreEspecifico = document.getElementById('input-nombre-nueva').value.trim();
@@ -459,7 +456,6 @@
             }
         }
 
-        // --- NAVEGACIÓN A PANTALLA DE INVENTARIO ---
         async function irAInventario() {
             document.getElementById('vista-sucursal').classList.add('oculto');
             document.getElementById('vista-inventario').classList.remove('oculto');
@@ -473,16 +469,22 @@
             document.getElementById('vista-sucursal').classList.remove('oculto');
         }
 
+        // CARGA DE PRODUCTOS FILTRADOS POR CADENA
         async function cargarProductosInventario() {
             const container = document.getElementById('lista-productos-container');
             container.innerHTML = '<p>Cargando productos...</p>';
 
             try {
-                const { data, error } = await supabaseClient.from('productos').select('*');
+                // Filtramos estrictamente por la cadena activa seleccionada en el paso anterior
+                const { data, error } = await supabaseClient
+                    .from('productos')
+                    .select('*')
+                    .eq('cadena', window.cadenaActiva);
+
                 if (error) throw error;
 
                 if (!data || data.length === 0) {
-                    container.innerHTML = '<p>No se encontraron productos registrados en la base de datos.</p>';
+                    container.innerHTML = `<p class="info">No se encontraron productos registrados para la cadena "${window.cadenaActiva}".</p>`;
                     return;
                 }
 
@@ -490,8 +492,8 @@
                 data.forEach(prod => {
                     html += `
                         <div class="producto-item">
-                            <b style="color: #6b21a8;">${prod.nombre || prod.nombre_producto || 'Producto sin nombre'}</b>
-                            <p style="margin: 4px 0 8px 0; font-size: 0.85rem; color: #666;">SKU/Código: ${prod.codigo || prod.sku || 'N/D'}</p>
+                            <b style="color: #6b21a8;">${prod.nombre_producto || 'Producto sin nombre'}</b>
+                            <p style="margin: 4px 0 8px 0; font-size: 0.85rem; color: #666;">Código de barras: ${prod.codigo_barras || 'N/D'}</p>
                             <label style="font-size: 0.9rem;">Cantidad en inventario:</label>
                             <input type="number" min="0" class="input-stock" data-product-id="${prod.id}" placeholder="Ej. 10">
                         </div>
@@ -525,6 +527,7 @@
             });
 
             console.log("Sucursal ID:", window.sucursalSeleccionadaId);
+            console.log("Cadena Filtrada:", window.cadenaActiva);
             console.log("Usuario:", usuarioActual);
             console.log("Comentarios:", comentarios);
             console.log("Inventario Capturado:", inventarioData);
