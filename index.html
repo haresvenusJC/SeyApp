@@ -642,30 +642,19 @@
                     });
                 });
 
-                console.log("Sucursal ID:", window.sucursalSeleccionadaId);
-                console.log("Cadena Filtrada:", window.cadenaActiva);
-                console.log("Usuario:", usuarioActual);
-                console.log("URLs Anaquel Subidas:", urlsAnaquel);
-                console.log("Inventario Capturado:", inventarioData);
-                console.log("Comentarios:", comentarios);
-                console.log("URLs Acciones Subidas:", urlsAcciones);
+                // 4. Inserción de datos en la tabla 'visitas_auditoria' de Supabase
+                const { error: insertError } = await supabaseClient
+                    .from('visitas_auditoria')
+                    .insert([{
+                        sucursal_id: window.sucursalSeleccionadaId,
+                        usuario: usuarioActual,
+                        comentarios: comentarios,
+                        fotos_anaquel: urlsAnaquel,
+                        fotos_acciones: urlsAcciones,
+                        inventario: inventarioData
+                    }]);
 
-                /* 
-                  Nota: Aquí puedes realizar el .insert() hacia tu tabla principal de Supabase 
-                  guardando `urlsAnaquel` y `urlsAcciones` si lo requieres de manera similar a esto:
-                  
-                  const { error: insertError } = await supabaseClient
-                      .from('visitas_auditoria')
-                      .insert([{
-                          sucursal_id: window.sucursalSeleccionadaId,
-                          usuario: usuarioActual,
-                          comentarios: comentarios,
-                          fotos_anaquel: urlsAnaquel,
-                          fotos_acciones: urlsAcciones,
-                          inventario: inventarioData
-                      }]);
-                  if (insertError) throw insertError;
-                */
+                if (insertError) throw insertError;
 
                 alert("¡Visita, inventario y evidencias registradas y subidas correctamente!");
                 location.reload();
