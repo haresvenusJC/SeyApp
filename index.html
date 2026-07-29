@@ -42,7 +42,8 @@
         .map-link { display: inline-block; margin-top: 5px; color: #6b21a8; text-decoration: none; font-weight: bold; }
         .map-link:hover { text-decoration: underline; }
         .oculto { display: none; }
-        .preview-img { max-width: 100%; height: auto; margin-top: 10px; border-radius: 4px; }
+        .preview-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+        .preview-thumb { width: 80px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc; }
         
         /* Estilos pantalla de Login */
         #login-screen {
@@ -87,6 +88,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+        }
+        .seccion-card {
+            background: #f8f9fa;
+            border: 1px solid #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
         }
     </style>
 </head>
@@ -148,8 +156,8 @@
                 <input type="text" id="input-nombre-nueva" placeholder="Ej. HEB Las Torres">
 
                 <label>Foto de la Fachada / Sucursal:</label>
-                <input type="file" id="input-foto-sucursal" accept="image/*" capture="environment" onchange="mostrarVistaPrevia(event)">
-                <div id="contenedor-preview"></div>
+                <input type="file" id="input-foto-sucursal" accept="image/*" capture="environment" onchange="mostrarVistaPreviaSucursal(event)">
+                <div id="contenedor-preview-sucursal"></div>
 
                 <button onclick="registrarNuevaSucursal()" style="background: #28a745; margin-top: 15px;">Guardar y Seleccionar Sucursal</button>
             </div>
@@ -162,24 +170,49 @@
             </div>
         </div>
 
-        <!-- VISTA 2: CAPTURA DE INVENTARIO Y COMENTARIOS -->
+        <!-- VISTA 2: CAPTURA DE INVENTARIO Y EVIDENCIAS -->
         <div id="vista-inventario" class="oculto">
             <div style="text-align: center; margin-bottom: 15px;">
                 <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 90px; height: auto;">
-                <h2>Captura de Inventario</h2>
+                <h2>Captura de Auditoría</h2>
                 <p id="info-sucursal-activa" class="info"></p>
             </div>
 
             <hr>
-            <h3>Productos y Existencias</h3>
-            <div id="lista-productos-container">
-                <p>Cargando lista de productos...</p>
+
+            <!-- NUEVA SECCIÓN 1: Evidencias de Anaquel -->
+            <div class="seccion-card">
+                <h3>Evidencias de Anaquel</h3>
+                <p style="font-size: 0.85rem; color: #666;">Sube de 2 a 5 fotografías de cómo se encontró el anaquel inicialmente.</p>
+                <input type="file" id="input-evidencias-anaquel" accept="image/*" multiple onchange="manejarSeleccionImagenes('anaquel', 2, 5)">
+                <div id="preview-anaquel" class="preview-container"></div>
+                <p id="error-anaquel" class="error" style="font-size: 0.8rem; margin-top: 5px;"></p>
             </div>
 
-            <h3 style="margin-top: 20px;">Acciones Realizadas y Comentarios</h3>
-            <textarea id="input-comentarios" placeholder="Describe las acciones realizadas, acuerdos con encargado, faltantes, exhibiciones, etc."></textarea>
+            <!-- SECCIÓN 2: Productos e Inventarios -->
+            <div class="seccion-card">
+                <h3>Productos y Existencias</h3>
+                <div id="lista-productos-container">
+                    <p>Cargando lista de productos...</p>
+                </div>
+            </div>
 
-            <button onclick="guardarVisitaEInventario()" style="background: #28a745; margin-top: 20px; font-size: 18px; padding: 12px;">Finalizar y Enviar Visita</button>
+            <!-- SECCIÓN 3: Comentarios -->
+            <div class="seccion-card">
+                <h3>Acciones Realizadas y Comentarios</h3>
+                <textarea id="input-comentarios" placeholder="Describe las acciones realizadas, acuerdos con encargado, faltantes, etc."></textarea>
+            </div>
+
+            <!-- NUEVA SECCIÓN 4: Acciones Implementadas -->
+            <div class="seccion-card">
+                <h3>Acciones Implementadas</h3>
+                <p style="font-size: 0.85rem; color: #666;">Sube de 3 a 5 fotografías que informen las mejoras hechas.</p>
+                <input type="file" id="input-acciones-hechas" accept="image/*" multiple onchange="manejarSeleccionImagenes('acciones', 3, 5)">
+                <div id="preview-acciones" class="preview-container"></div>
+                <p id="error-acciones" class="error" style="font-size: 0.8rem; margin-top: 5px;"></p>
+            </div>
+
+            <button onclick="guardarVisitaEInventario()" style="background: #28a745; margin-top: 10px; font-size: 18px; padding: 12px;">Finalizar y Enviar Visita</button>
             <button onclick="regresarAVistaSucursal()" style="background: #6c757d; margin-top: 10px;">⬅ Volver a Sucursal</button>
         </div>
 
@@ -195,7 +228,11 @@
         window.currentLon = null;
         window.sucursalSeleccionadaId = null;
         window.nombreSucursalSeleccionada = "";
-        window.cadenaActiva = ""; // Almacenará la cadena seleccionada para filtrar productos
+        window.cadenaActiva = ""; 
+
+        // Almacenamiento temporal para los archivos seleccionados en las nuevas secciones
+        window.archivosAnaquel = [];
+        window.archivosAcciones = [];
 
         // Control de Sesión de Login al cargar la página
         document.addEventListener("DOMContentLoaded", () => {
@@ -274,7 +311,7 @@
 
         async function verificarProximidadSucursal() {
             const cadena = document.getElementById('select-cadena').value;
-            window.cadenaActiva = cadena; // Guardar la cadena seleccionada globalmente
+            window.cadenaActiva = cadena; 
             const resultadoDiv = document.getElementById('contenedor-resultado-proximidad');
             const formNueva = document.getElementById('form-nueva-sucursal');
             const btnContinuar = document.getElementById('contenedor-btn-continuar');
@@ -380,18 +417,51 @@
             document.getElementById('contenedor-btn-continuar').classList.remove('oculto');
         }
 
-        function mostrarVistaPrevia(event) {
+        function mostrarVistaPreviaSucursal(event) {
             const archivo = event.target.files[0];
-            const contenedor = document.getElementById('contenedor-preview');
+            const contenedor = document.getElementById('contenedor-preview-sucursal');
             contenedor.innerHTML = '';
 
             if (archivo) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    contenedor.innerHTML = `<img src="${e.target.result}" class="preview-img" alt="Vista previa">`;
+                    contenedor.innerHTML = `<img src="${e.target.result}" class="preview-thumb" alt="Vista previa">`;
                 }
                 reader.readAsDataURL(archivo);
             }
+        }
+
+        // Validador y gestor visual para las nuevas secciones de imágenes múltiples
+        function manejarSeleccionImagenes(tipo, min, max) {
+            const input = document.getElementById(tipo === 'anaquel' ? 'input-evidencias-anaquel' : 'input-acciones-hechas');
+            const previewContainer = document.getElementById(tipo === 'anaquel' ? 'preview-anaquel' : 'preview-acciones');
+            const errorContainer = document.getElementById(tipo === 'anaquel' ? 'error-anaquel' : 'error-acciones');
+            
+            previewContainer.innerHTML = '';
+            errorContainer.innerText = '';
+
+            const files = Array.from(input.files);
+
+            if (files.length < min || files.length > max) {
+                errorContainer.innerText = `⚠️ Debes seleccionar entre ${min} y ${max} fotografías (Seleccionadas: ${files.length}).`;
+                if (tipo === 'anaquel') window.archivosAnaquel = [];
+                if (tipo === 'acciones') window.archivosAcciones = [];
+                return;
+            }
+
+            if (tipo === 'anaquel') window.archivosAnaquel = files;
+            if (tipo === 'acciones') window.archivosAcciones = files;
+
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    img.className = 'preview-thumb';
+                    previewContainer.appendChild(img);
+                }
+                reader.readAsDataURL(file);
+            });
         }
 
         async function registrarNuevaSucursal() {
@@ -469,13 +539,11 @@
             document.getElementById('vista-sucursal').classList.remove('oculto');
         }
 
-        // CARGA DE PRODUCTOS FILTRADOS POR CADENA
         async function cargarProductosInventario() {
             const container = document.getElementById('lista-productos-container');
             container.innerHTML = '<p>Cargando productos...</p>';
 
             try {
-                // Filtramos estrictamente por la cadena activa seleccionada en el paso anterior
                 const { data, error } = await supabaseClient
                     .from('productos')
                     .select('*')
@@ -506,34 +574,106 @@
             }
         }
 
+        // Función auxiliar para subir un arreglo de imágenes a un bucket específico de Supabase Storage
+        async function subirImágenesABucket(archivosArray, nombreBucket) {
+            let urlsSubidas = [];
+
+            for (let archivo of archivosArray) {
+                const nombreArchivoUnico = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${archivo.name.replace(/\s+/g, '_')}`;
+
+                const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                    .from(nombreBucket)
+                    .upload(nombreArchivoUnico, archivo);
+
+                if (uploadError) {
+                    throw new Error(`Error al subir la imagen ${archivo.name}: ${uploadError.message}`);
+                }
+
+                const { data: publicData } = supabaseClient.storage
+                    .from(nombreBucket)
+                    .getPublicUrl(nombreArchivoUnico);
+
+                if (publicData && publicData.publicUrl) {
+                    urlsSubidas.push(publicData.publicUrl);
+                }
+            }
+
+            return urlsSubidas;
+        }
+
         async function guardarVisitaEInventario() {
             const comentarios = document.getElementById('input-comentarios').value.trim();
             const inputsStock = document.querySelectorAll('.input-stock');
             const usuarioActual = localStorage.getItem("sey_user") || "Anónimo";
+
+            // Validaciones de cantidad de fotos requeridas antes de enviar
+            if (window.archivosAnaquel.length < 2 || window.archivosAnaquel.length > 5) {
+                alert('Debes adjuntar de 2 a 5 fotografías en "Evidencias de Anaquel".');
+                return;
+            }
 
             if (!comentarios) {
                 alert('Por favor ingresa los comentarios y acciones realizadas en la sucursal.');
                 return;
             }
 
-            let inventarioData = [];
-            inputsStock.forEach(input => {
-                const productoId = input.getAttribute('data-product-id');
-                const cantidad = input.value.trim() !== "" ? parseInt(input.value) : 0;
-                inventarioData.push({
-                    producto_id: productoId,
-                    cantidad: cantidad
+            if (window.archivosAcciones.length < 3 || window.archivosAcciones.length > 5) {
+                alert('Debes adjuntar de 3 a 5 fotografías en "Acciones Implementadas".');
+                return;
+            }
+
+            try {
+                alert("Subiendo evidencias a la nube, por favor espera un momento...");
+
+                // 1. Subir evidencias de anaquel al bucket 'anaquel-evidencias'
+                const urlsAnaquel = await subirImágenesABucket(window.archivosAnaquel, 'anaquel-evidencias');
+
+                // 2. Subir acciones implementadas al bucket 'acciones-mejoras'
+                const urlsAcciones = await subirImágenesABucket(window.archivosAcciones, 'acciones-mejoras');
+
+                // 3. Recolectar datos de inventario
+                let inventarioData = [];
+                inputsStock.forEach(input => {
+                    const productoId = input.getAttribute('data-product-id');
+                    const cantidad = input.value.trim() !== "" ? parseInt(input.value) : 0;
+                    inventarioData.push({
+                        producto_id: productoId,
+                        cantidad: cantidad
+                    });
                 });
-            });
 
-            console.log("Sucursal ID:", window.sucursalSeleccionadaId);
-            console.log("Cadena Filtrada:", window.cadenaActiva);
-            console.log("Usuario:", usuarioActual);
-            console.log("Comentarios:", comentarios);
-            console.log("Inventario Capturado:", inventarioData);
+                console.log("Sucursal ID:", window.sucursalSeleccionadaId);
+                console.log("Cadena Filtrada:", window.cadenaActiva);
+                console.log("Usuario:", usuarioActual);
+                console.log("URLs Anaquel Subidas:", urlsAnaquel);
+                console.log("Inventario Capturado:", inventarioData);
+                console.log("Comentarios:", comentarios);
+                console.log("URLs Acciones Subidas:", urlsAcciones);
 
-            alert("¡Visita e inventario registrados correctamente!");
-            location.reload();
+                /* 
+                  Nota: Aquí puedes realizar el .insert() hacia tu tabla principal de Supabase 
+                  guardando `urlsAnaquel` y `urlsAcciones` si lo requieres de manera similar a esto:
+                  
+                  const { error: insertError } = await supabaseClient
+                      .from('visitas_auditoria')
+                      .insert([{
+                          sucursal_id: window.sucursalSeleccionadaId,
+                          usuario: usuarioActual,
+                          comentarios: comentarios,
+                          fotos_anaquel: urlsAnaquel,
+                          fotos_acciones: urlsAcciones,
+                          inventario: inventarioData
+                      }]);
+                  if (insertError) throw insertError;
+                */
+
+                alert("¡Visita, inventario y evidencias registradas y subidas correctamente!");
+                location.reload();
+
+            } catch (err) {
+                alert("Hubo un error al procesar o subir las imágenes: " + err.message);
+                console.error(err);
+            }
         }
     </script>
 </body>
