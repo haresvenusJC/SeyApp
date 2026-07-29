@@ -107,6 +107,7 @@
             border: 1px solid #e2e8f0;
             padding: 10px;
             text-align: left;
+            vertical-align: middle;
         }
 
         th {
@@ -123,7 +124,6 @@
 
         .oculto { display: none !important; }
         
-        /* Pantalla de Acceso Back Office */
         #login-bo {
             display: flex;
             flex-direction: column;
@@ -138,7 +138,6 @@
             text-align: center;
         }
 
-        /* Estilos del Menú Lateral Sandwich y Reportes Dinámicos */
         #sidebar-menu {
             position: fixed;
             top: 0;
@@ -213,9 +212,153 @@
             border-top: 3px solid #6b21a8;
             padding-top: 15px;
         }
+        
+        .btn-link-evidencia {
+            display: inline-block;
+            background: #e6007e;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            text-decoration: none;
+            margin-top: 2px;
+            margin-right: 4px;
+            cursor: pointer;
+            border: none;
+            font-weight: bold;
+        }
+        .btn-link-evidencia:hover { background: #c5006b; }
+        .btn-link-accion { background: #28a745; }
+        .btn-link-accion:hover { background: #218838; }
+
+        /* Estilo profesional para la mini-tabla de inventario en celda */
+        .tabla-inventario-mini {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 4px 0;
+        }
+        .tabla-inventario-mini th {
+            background: #f1f5f9;
+            color: #475569;
+            padding: 5px 8px;
+            font-size: 0.75rem;
+            border-bottom: 1px solid #cbd5e1;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .tabla-inventario-mini td {
+            padding: 5px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #334155;
+        }
+        .tabla-inventario-mini tr:last-child td {
+            border-bottom: none;
+        }
+        .badge-cantidad {
+            background: #f3e8ff;
+            color: #6b21a8;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-weight: bold;
+            font-size: 0.75rem;
+            display: inline-block;
+            text-align: center;
+            min-width: 24px;
+        }
+        .inventario-scroll-box {
+            max-height: 160px;
+            overflow-y: auto;
+            padding-right: 2px;
+        }
+
+        /* Modal Galería Visor con Botones de Navegación */
+        #modal-visor {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            flex-direction: column;
+        }
+        #modal-visor.oculto { display: none !important; }
+        
+        .modal-cuerpo-visor {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            max-width: 90%;
+            max-height: 75vh;
+        }
+        .modal-contenido {
+            max-width: 100%;
+            max-height: 75vh;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            object-fit: contain;
+        }
+        .modal-cerrar {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            background: white;
+            color: #333;
+            border: none;
+            font-size: 24px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2010;
+        }
+        .btn-nav-galeria {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            font-size: 28px;
+            padding: 10px 18px;
+            cursor: pointer;
+            border-radius: 50%;
+            margin: 0 15px;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-nav-galeria:hover { background: rgba(255, 255, 255, 0.4); }
+        #modal-caption { color: white; margin-top: 15px; font-size: 1.1rem; font-weight: bold; text-align: center; }
+        #modal-contador { color: #bbb; margin-top: 5px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
+
+    <!-- MODAL VISOR DE EVIDENCIAS TIPO GALERÍA -->
+    <div id="modal-visor" class="oculto">
+        <button class="modal-cerrar" onclick="cerrarVisorModal()">×</button>
+        <p id="modal-caption" style="margin-bottom: 10px;"></p>
+        
+        <div class="modal-cuerpo-visor">
+            <button class="btn-nav-galeria" id="btn-prev" onclick="cambiarFotoGaleria(-1)">‹</button>
+            <img id="modal-img" class="modal-contenido" src="" alt="Evidencia Ampliada">
+            <button class="btn-nav-galeria" id="btn-next" onclick="cambiarFotoGaleria(1)">›</button>
+        </div>
+        
+        <p id="modal-contador"></p>
+    </div>
 
     <!-- 1. PANTALLA DE ACCESO AL BACK OFFICE -->
     <div id="login-bo">
@@ -227,7 +370,7 @@
         <p id="login-error" class="error" style="font-size: 0.85rem; margin-top: 10px; color: #e74c3c;"></p>
     </div>
 
-    <!-- BOTÓN SANDWICH PARA MENÚ LATERAL (Oculto hasta iniciar sesión) -->
+    <!-- BOTÓN SANDWICH PARA MENÚ LATERAL -->
     <button class="hamburger-btn oculto" id="btn-sandwich" onclick="toggleSidebar()">☰ Reportes Dinámicos</button>
 
     <!-- MENÚ LATERAL DESLIZANTE -->
@@ -261,6 +404,7 @@
                 <label><input type="checkbox" class="col-selector" value="cadena" checked> Cadena</label>
                 <label><input type="checkbox" class="col-selector" value="sucursal" checked> Sucursal</label>
                 <label><input type="checkbox" class="col-selector" value="comentarios" checked> Comentarios</label>
+                <label><input type="checkbox" class="col-selector" value="evidencias" checked> Evidencias / Acciones</label>
                 <label><input type="checkbox" class="col-selector" value="inventario" checked> Detalle Inv.</label>
             </div>
         </div>
@@ -336,21 +480,22 @@
 
         <!-- Sección Detalle de Inventario Histórico -->
         <div style="margin-top: 30px;">
-            <h3>Detalle de Inventarios por Sucursal y Fechas</h3>
+            <h3>Detalle de Inventarios y Evidencias por Sucursal</h3>
             <div class="table-responsive">
                 <table id="tabla-inventarios">
                     <thead>
                         <tr>
-                            <th>Fecha / Hora</th>
-                            <th>Auditor</th>
-                            <th>Cadena</th>
-                            <th>Sucursal</th>
-                            <th>Comentarios</th>
-                            <th>Inventario Detallado (Prod - Cantidad)</th>
+                            <th style="width: 13%;">Fecha / Hora</th>
+                            <th style="width: 10%;">Auditor</th>
+                            <th style="width: 10%;">Cadena</th>
+                            <th style="width: 12%;">Sucursal</th>
+                            <th style="width: 15%;">Comentarios</th>
+                            <th style="width: 15%;">Evidencias / Acciones</th>
+                            <th style="width: 25%;">Inventario Detallado</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-inventarios">
-                        <tr><td colspan="6" style="text-align: center;">Cargando registros...</td></tr>
+                        <tr><td colspan="7" style="text-align: center;">Cargando registros...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -373,6 +518,10 @@
         let cacheGlobalVisitas = [];
         let cacheGlobalProductos = [];
         let cacheGlobalSucursales = [];
+
+        let galeriaActualUrls = [];
+        let galeriaIndiceActual = 0;
+        let galeriaTituloBase = '';
 
         document.addEventListener("DOMContentLoaded", () => {
             const loginBo = document.getElementById("login-bo");
@@ -424,6 +573,74 @@
             }
         }
 
+        function procesarUrlsEvidencia(campoFotos, bucketName) {
+            if (!campoFotos) return [];
+            let listaRutas = campoFotos;
+
+            if (typeof campoFotos === 'string') {
+                campoFotos = campoFotos.trim();
+                if (campoFotos.startsWith('[')) {
+                    try { listaRutas = JSON.parse(campoFotos); } catch (e) { listaRutas = [campoFotos]; }
+                } else {
+                    listaRutas = [campoFotos];
+                }
+            }
+
+            if (!Array.isArray(listaRutas)) listaRutas = [listaRutas];
+
+            return listaRutas.map(item => {
+                if (!item) return '';
+                if (typeof item === 'string' && (item.startsWith('http://') || item.startsWith('https://'))) return item;
+                const rutaLimpia = String(item).replace(/^["']|["']$/g, '');
+                const { data } = supabaseClient.storage.from(bucketName).getPublicUrl(rutaLimpia);
+                return data.publicUrl;
+            }).filter(Boolean);
+        }
+
+        function abrirGaleriaModal(urlsJsonStr, titulo) {
+            try { galeriaActualUrls = JSON.parse(urlsJsonStr); } catch(e) { galeriaActualUrls = []; }
+            if (!Array.isArray(galeriaActualUrls) || galeriaActualUrls.length === 0) return;
+
+            galeriaIndiceActual = 0;
+            galeriaTituloBase = titulo;
+            
+            actualizarVistaGaleria();
+            document.getElementById('modal-visor').classList.remove('oculto');
+        }
+
+        function cambiarFotoGaleria(direccion) {
+            galeriaIndiceActual += direccion;
+            if (galeriaIndiceActual < 0) galeriaIndiceActual = galeriaActualUrls.length - 1;
+            else if (galeriaIndiceActual >= galeriaActualUrls.length) galeriaIndiceActual = 0;
+            actualizarVistaGaleria();
+        }
+
+        function actualizarVistaGaleria() {
+            const modalImg = document.getElementById('modal-img');
+            const modalCaption = document.getElementById('modal-caption');
+            const modalContador = document.getElementById('modal-contador');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+
+            modalImg.src = galeriaActualUrls[galeriaIndiceActual];
+            modalCaption.textContent = galeriaTituloBase;
+            modalContador.textContent = `Foto ${galeriaIndiceActual + 1} de ${galeriaActualUrls.length}`;
+
+            if (galeriaActualUrls.length <= 1) {
+                btnPrev.style.display = 'none';
+                btnNext.style.display = 'none';
+            } else {
+                btnPrev.style.display = 'flex';
+                btnNext.style.display = 'flex';
+            }
+        }
+
+        function cerrarVisorModal() {
+            document.getElementById('modal-visor').classList.add('oculto');
+            document.getElementById('modal-img').src = '';
+            galeriaActualUrls = [];
+        }
+
         async function inicializarBackOffice() {
             const hoy = new Date();
             const hace30Dias = new Date();
@@ -446,13 +663,11 @@
                 const { data: sucs, error: errSucs } = await supabaseClient.from('sucursales').select('*');
                 if (errSucs) throw errSucs;
                 cacheGlobalSucursales = sucs || [];
-
                 poblarSelectsCadenasYSucursales();
 
                 const { data: prods, error: errProds } = await supabaseClient.from('productos').select('*');
                 if (errProds) throw errProds;
                 cacheGlobalProductos = prods || [];
-
             } catch (err) {
                 console.error("Error cargando catálogos auxiliares:", err);
             }
@@ -460,11 +675,8 @@
 
         function poblarSelectsCadenasYSucursales() {
             const cadenasUnicas = [...new Set(cacheGlobalSucursales.map(s => s.cadena).filter(Boolean))].sort();
-
             let cadenaOptions = '<option value="">Todas las cadenas</option>';
-            cadenasUnicas.forEach(c => {
-                cadenaOptions += `<option value="${c}">${c}</option>`;
-            });
+            cadenasUnicas.forEach(c => { cadenaOptions += `<option value="${c}">${c}</option>`; });
 
             document.getElementById('filtro-cadena').innerHTML = cadenaOptions;
             document.getElementById('sidebar-cadena').innerHTML = cadenaOptions;
@@ -476,32 +688,22 @@
         function poblarSelectSucursalesGlobal() {
             const cadenaSeleccionada = document.getElementById('filtro-cadena').value;
             const selectSucursal = document.getElementById('filtro-sucursal');
-            
             let sucsFiltradas = cacheGlobalSucursales;
-            if (cadenaSeleccionada) {
-                sucsFiltradas = cacheGlobalSucursales.filter(s => s.cadena === cadenaSeleccionada);
-            }
+            if (cadenaSeleccionada) sucsFiltradas = cacheGlobalSucursales.filter(s => s.cadena === cadenaSeleccionada);
 
             let optionsHtml = '<option value="">Todas las sucursales</option>';
-            sucsFiltradas.forEach(s => {
-                optionsHtml += `<option value="${s.id}">${s.nombre_sucursal}</option>`;
-            });
+            sucsFiltradas.forEach(s => { optionsHtml += `<option value="${s.id}">${s.nombre_sucursal}</option>`; });
             selectSucursal.innerHTML = optionsHtml;
         }
 
         function poblarSelectSucursalesSidebar() {
             const cadenaSeleccionada = document.getElementById('sidebar-cadena').value;
             const selectSidebarSucursal = document.getElementById('sidebar-sucursal');
-            
             let sucsFiltradas = cacheGlobalSucursales;
-            if (cadenaSeleccionada) {
-                sucsFiltradas = cacheGlobalSucursales.filter(s => s.cadena === cadenaSeleccionada);
-            }
+            if (cadenaSeleccionada) sucsFiltradas = cacheGlobalSucursales.filter(s => s.cadena === cadenaSeleccionada);
 
             let optionsHtml = '<option value="">Todas las sucursales</option>';
-            sucsFiltradas.forEach(s => {
-                optionsHtml += `<option value="${s.id}">${s.nombre_sucursal}</option>`;
-            });
+            sucsFiltradas.forEach(s => { optionsHtml += `<option value="${s.id}">${s.nombre_sucursal}</option>`; });
             selectSidebarSucursal.innerHTML = optionsHtml;
         }
 
@@ -517,10 +719,7 @@
                 const sucursalIdFiltro = document.getElementById('filtro-sucursal').value;
                 const cadenaFiltro = document.getElementById('filtro-cadena').value;
 
-                let query = supabaseClient
-                    .from('visitas_auditoria')
-                    .select('*')
-                    .order('created_at', { ascending: false });
+                let query = supabaseClient.from('visitas_auditoria').select('*').order('created_at', { ascending: false });
 
                 if (fechaInicio) query = query.gte('created_at', `${fechaInicio}T00:00:00`);
                 if (fechaFin) query = query.lte('created_at', `${fechaFin}T23:59:59`);
@@ -528,14 +727,9 @@
                 if (sucursalIdFiltro) {
                     query = query.eq('sucursal_id', sucursalIdFiltro);
                 } else if (cadenaFiltro) {
-                    const idsSucursalesCadena = cacheGlobalSucursales
-                        .filter(s => s.cadena === cadenaFiltro)
-                        .map(s => s.id);
-                    if (idsSucursalesCadena.length > 0) {
-                        query = query.in('sucursal_id', idsSucursalesCadena);
-                    } else {
-                        query = query.eq('sucursal_id', -999); 
-                    }
+                    const idsSucursalesCadena = cacheGlobalSucursales.filter(s => s.cadena === cadenaFiltro).map(s => s.id);
+                    if (idsSucursalesCadena.length > 0) query = query.in('sucursal_id', idsSucursalesCadena);
+                    else query = query.eq('sucursal_id', -999); 
                 }
 
                 const { data, error } = await query;
@@ -543,7 +737,6 @@
 
                 cacheGlobalVisitas = data || [];
                 procesarYRenderizarMetricas();
-
             } catch (err) {
                 alert("Error al cargar los datos de auditoría: " + err.message);
                 console.error(err);
@@ -552,7 +745,6 @@
 
         function procesarYRenderizarMetricas() {
             const visitas = cacheGlobalVisitas;
-
             document.getElementById('kpi-total-auditorias').textContent = visitas.length;
 
             const sucursalesUnicas = new Set(visitas.map(v => v.sucursal_id));
@@ -561,9 +753,7 @@
             let stockTotalAcumulado = 0;
             visitas.forEach(v => {
                 if (v.inventario && Array.isArray(v.inventario)) {
-                    v.inventario.forEach(item => {
-                        stockTotalAcumulado += (parseInt(item.cantidad) || 0);
-                    });
+                    v.inventario.forEach(item => { stockTotalAcumulado += (parseInt(item.cantidad) || 0); });
                 }
             });
             document.getElementById('kpi-total-stock').textContent = stockTotalAcumulado.toLocaleString();
@@ -594,23 +784,10 @@
             const dataValues = labels.map(d => conteoDias[d]);
 
             if (chartDiaInstance) chartDiaInstance.destroy();
-
             chartDiaInstance = new Chart(ctx, {
                 type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Número de Auditorías',
-                        data: dataValues,
-                        backgroundColor: '#6b21a8',
-                        borderRadius: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-                }
+                data: { labels: labels, datasets: [{ label: 'Número de Auditorías', data: dataValues, backgroundColor: '#6b21a8', borderRadius: 4 }] },
+                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
             });
         }
 
@@ -620,25 +797,10 @@
             const dataValues = Object.values(conteoMeses);
 
             if (chartMesInstance) chartMesInstance.destroy();
-
             chartMesInstance = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Auditorías por Mes',
-                        data: dataValues,
-                        borderColor: '#e6007e',
-                        backgroundColor: 'rgba(230, 0, 126, 0.1)',
-                        fill: true,
-                        tension: 0.2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: { legend: { display: false } },
-                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-                }
+                data: { labels: labels, datasets: [{ label: 'Auditorías por Mes', data: dataValues, borderColor: '#e6007e', backgroundColor: 'rgba(230, 0, 126, 0.1)', fill: true, tension: 0.2 }] },
+                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
             });
         }
 
@@ -647,7 +809,7 @@
             tbody.innerHTML = '';
 
             if (visitas.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #666;">No se encontraron registros con los filtros seleccionados.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #666;">No se encontraron registros con los filtros seleccionados.</td></tr>`;
                 return;
             }
 
@@ -663,16 +825,39 @@
                 const nombreSucursal = sucInfo.nombre_sucursal || 'Sucursal Desconocida';
                 const nombreCadena = sucInfo.cadena || 'General';
                 
-                let htmlInventarioDetalle = '<ul style="margin: 0; padding-left: 15px; font-size: 0.85rem;">';
+                // Evidencias / Acciones
+                let htmlEvidencias = '';
+                const urlsAnaquel = procesarUrlsEvidencia(v.fotos_anaquel, 'anaquel-evidencias');
+                if (urlsAnaquel.length > 0) {
+                    const jsonStrAnaquel = JSON.stringify(urlsAnaquel).replace(/"/g, '&quot;');
+                    htmlEvidencias += `<button onclick="abrirGaleriaModal('${jsonStrAnaquel}', '📸 Evidencias de Anaquel (${urlsAnaquel.length})')" class="btn-link-evidencia">📸 Evidencias (${urlsAnaquel.length})</button>`;
+                }
+
+                const urlsAcciones = procesarUrlsEvidencia(v.fotos_acciones, 'acciones-mejoras');
+                if (urlsAcciones.length > 0) {
+                    const jsonStrAcciones = JSON.stringify(urlsAcciones).replace(/"/g, '&quot;');
+                    htmlEvidencias += `<button onclick="abrirGaleriaModal('${jsonStrAcciones}', '✅ Acciones de Mejora (${urlsAcciones.length})')" class="btn-link-evidencia btn-link-accion">✅ Acciones (${urlsAcciones.length})</button>`;
+                }
+
+                if (urlsAnaquel.length === 0 && urlsAcciones.length === 0) {
+                    htmlEvidencias = '<span style="color: #888; font-size: 0.85rem;">Sin archivos</span>';
+                }
+
+                // --- DISEÑO PROFESIONAL DE LA MINI-TABLA DE INVENTARIO ---
+                let htmlInventarioDetalle = '<div class="inventario-scroll-box"><table class="tabla-inventario-mini"><thead><tr><th>Producto</th><th style="text-align:right; width:55px;">Cant.</th></tr></thead><tbody>';
+                
                 if (v.inventario && Array.isArray(v.inventario) && v.inventario.length > 0) {
                     v.inventario.forEach(item => {
                         const nombreProd = mapaProductos[item.producto_id] || 'ID: ' + item.producto_id.substring(0, 8);
-                        htmlInventarioDetalle += `<li><b>${nombreProd}</b>: ${item.cantidad} unidades</li>`;
+                        htmlInventarioDetalle += `<tr>
+                            <td><b>${nombreProd}</b></td>
+                            <td style="text-align:right;"><span class="badge-cantidad">${item.cantidad}</span></td>
+                        </tr>`;
                     });
                 } else {
-                    htmlInventarioDetalle += `<li>Sin inventario registrado</li>`;
+                    htmlInventarioDetalle += `<tr><td colspan="2" style="text-align: center; color: #888;">Sin inventario registrado</td></tr>`;
                 }
-                htmlInventarioDetalle += '</ul>';
+                htmlInventarioDetalle += '</tbody></table></div>';
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
@@ -681,6 +866,7 @@
                     <td><span style="background: #f3e8ff; color: #6b21a8; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem;">${nombreCadena}</span></td>
                     <td>${nombreSucursal}</td>
                     <td>${v.comentarios || 'Sin comentarios'}</td>
+                    <td>${htmlEvidencias}</td>
                     <td>${htmlInventarioDetalle}</td>
                 `;
                 tbody.appendChild(tr);
@@ -694,10 +880,7 @@
                 const cadenaFiltro = document.getElementById('sidebar-cadena').value;
                 const sucursalIdFiltro = document.getElementById('sidebar-sucursal').value;
 
-                let query = supabaseClient
-                    .from('visitas_auditoria')
-                    .select('*')
-                    .order('created_at', { ascending: false });
+                let query = supabaseClient.from('visitas_auditoria').select('*').order('created_at', { ascending: false });
 
                 if (fechaInicio) query = query.gte('created_at', `${fechaInicio}T00:00:00`);
                 if (fechaFin) query = query.lte('created_at', `${fechaFin}T23:59:59`);
@@ -705,28 +888,20 @@
                 if (sucursalIdFiltro) {
                     query = query.eq('sucursal_id', sucursalIdFiltro);
                 } else if (cadenaFiltro) {
-                    const idsSucursalesCadena = cacheGlobalSucursales
-                        .filter(s => s.cadena === cadenaFiltro)
-                        .map(s => s.id);
-                    if (idsSucursalesCadena.length > 0) {
-                        query = query.in('sucursal_id', idsSucursalesCadena);
-                    } else {
-                        query = query.eq('sucursal_id', -999);
-                    }
+                    const idsSucursalesCadena = cacheGlobalSucursales.filter(s => s.cadena === cadenaFiltro).map(s => s.id);
+                    if (idsSucursalesCadena.length > 0) query = query.in('sucursal_id', idsSucursalesCadena);
+                    else query = query.eq('sucursal_id', -999);
                 }
 
                 const { data, error } = await query;
                 if (error) throw error;
 
                 const columnasSeleccionadas = Array.from(document.querySelectorAll('.col-selector:checked')).map(cb => cb.value);
-
                 construirTablaDinamicaHTML(data || [], columnasSeleccionadas);
                 toggleSidebar(); 
 
-                // Desplazar automáticamente la pantalla hacia el reporte generado
                 setTimeout(() => {
-                    const contenedorResultado = document.getElementById('resultado-dinamico-container');
-                    contenedorResultado.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    document.getElementById('resultado-dinamico-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }, 200);
 
             } catch (err) {
@@ -757,6 +932,7 @@
             if (columnas.includes('cadena')) html += '<th>Cadena</th>';
             if (columnas.includes('sucursal')) html += '<th>Sucursal</th>';
             if (columnas.includes('comentarios')) html += '<th>Comentarios</th>';
+            if (columnas.includes('evidencias')) html += '<th>Evidencias / Acciones</th>';
             if (columnas.includes('inventario')) html += '<th>Detalle de Inventario</th>';
             html += '</tr></thead><tbody>';
 
@@ -766,28 +942,44 @@
                 const nombreCadena = sucInfo.cadena || 'General';
 
                 html += '<tr>';
-                if (columnas.includes('fecha')) {
-                    html += `<td>${new Date(reg.created_at).toLocaleString()}</td>`;
+                if (columnas.includes('fecha')) html += `<td>${new Date(reg.created_at).toLocaleString()}</td>`;
+                if (columnas.includes('usuario')) html += `<td>${reg.usuario || 'Anónimo'}</td>`;
+                if (columnas.includes('cadena')) html += `<td><b>${nombreCadena}</b></td>`;
+                if (columnas.includes('sucursal')) html += `<td>${nombreSucursal}</td>`;
+                if (columnas.includes('comentarios')) html += `<td>${reg.comentarios || ''}</td>`;
+                
+                if (columnas.includes('evidencias')) {
+                    let htmlEvidenciasDinamicas = '';
+                    const urlsAnaquel = procesarUrlsEvidencia(reg.fotos_anaquel, 'anaquel-evidencias');
+                    if (urlsAnaquel.length > 0) {
+                        const jsonStrAnaquel = JSON.stringify(urlsAnaquel).replace(/"/g, '&quot;');
+                        htmlEvidenciasDinamicas += `<button onclick="abrirGaleriaModal('${jsonStrAnaquel}', '📸 Evidencias de Anaquel (${urlsAnaquel.length})')" class="btn-link-evidencia">📸 Evidencias (${urlsAnaquel.length})</button>`;
+                    }
+
+                    const urlsAcciones = procesarUrlsEvidencia(reg.fotos_acciones, 'acciones-mejoras');
+                    if (urlsAcciones.length > 0) {
+                        const jsonStrAcciones = JSON.stringify(urlsAcciones).replace(/"/g, '&quot;');
+                        htmlEvidenciasDinamicas += `<button onclick="abrirGaleriaModal('${jsonStrAcciones}', '✅ Acciones de Mejora (${urlsAcciones.length})')" class="btn-link-evidencia btn-link-accion">✅ Acciones (${urlsAcciones.length})</button>`;
+                    }
+
+                    if (urlsAnaquel.length === 0 && urlsAcciones.length === 0) htmlEvidenciasDinamicas = 'Sin archivos';
+                    html += `<td>${htmlEvidenciasDinamicas}</td>`;
                 }
-                if (columnas.includes('usuario')) {
-                    html += `<td>${reg.usuario || 'Anónimo'}</td>`;
-                }
-                if (columnas.includes('cadena')) {
-                    html += `<td><b>${nombreCadena}</b></td>`;
-                }
-                if (columnas.includes('sucursal')) {
-                    html += `<td>${nombreSucursal}</td>`;
-                }
-                if (columnas.includes('comentarios')) {
-                    html += `<td>${reg.comentarios || ''}</td>`;
-                }
+
                 if (columnas.includes('inventario')) {
-                    let invTexto = (reg.inventario || []).map(item => {
-                        const nombreProd = mapaProductos[item.producto_id] || 'Prod ID: ' + item.producto_id.substring(0, 8);
-                        return `${nombreProd}: ${item.cantidad} u`;
-                    }).join('<br>');
-                    html += `<td>${invTexto || 'Sin inventario'}</td>`;
+                    let invHtml = '<table class="tabla-inventario-mini" style="margin:0;"><thead><tr><th>Producto</th><th style="text-align:right; width:45px;">Cant</th></tr></thead><tbody>';
+                    if (reg.inventario && Array.isArray(reg.inventario) && reg.inventario.length > 0) {
+                        reg.inventario.forEach(item => {
+                            const nombreProd = mapaProductos[item.producto_id] || 'Prod ID: ' + item.producto_id.substring(0, 8);
+                            invHtml += `<tr><td>${nombreProd}</td><td style="text-align:right;"><span class="badge-cantidad">${item.cantidad}</span></td></tr>`;
+                        });
+                    } else {
+                        invHtml += `<tr><td colspan="2" style="text-align:center; color:#888;">Sin inventario</td></tr>`;
+                    }
+                    invHtml += '</tbody></table>';
+                    html += `<td>${invHtml}</td>`;
                 }
+
                 html += '</tr>';
             });
 
