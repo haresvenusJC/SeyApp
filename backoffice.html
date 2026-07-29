@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Back Office - Análisis de Auditorías</title>
+    <!-- SDK de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Librería de Gráficas Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Librería SheetJS para exportar a Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 20px; 
+            min-height: 100vh;
+            background: linear-gradient(135deg, #e6007e, #6b21a8);
+            background-attachment: fixed;
+            color: #333; 
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+        }
+
+        .container { 
+            width: 100%;
+            max-width: 1100px; 
+            background: white; 
+            padding: 25px; 
+            border-radius: 12px; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2); 
+            margin-bottom: 40px;
+        }
+
+        h2 { color: #6b21a8; margin-top: 0; }
+        h3 { color: #333333; border-bottom: 2px solid #eee; padding-bottom: 5px; }
+        
+        button { background: #6b21a8; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 15px; font-weight: bold; }
+        button:hover { background: #551a8b; }
+
+        select, input[type="date"], input[type="text"] { 
+            padding: 10px; 
+            border-radius: 4px; 
+            border: 1px solid #ccc; 
+            font-size: 15px; 
+            box-sizing: border-box; 
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .filters-bar {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .kpi-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .kpi-card {
+            background: #fdfdfd;
+            border: 1px solid #e0e0e0;
+            border-left: 5px solid #6b21a8;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .kpi-card h4 { margin: 0 0 5px 0; color: #666; font-size: 0.9rem; }
+        .kpi-card .value { font-size: 1.5rem; font-weight: bold; color: #6b21a8; margin: 0; }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        .chart-card {
+            background: #fdfdfd;
+            border: 1px solid #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            border: 1px solid #e2e8f0;
+            padding: 10px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f8f9fa;
+            color: #6b21a8;
+        }
+
+        tr:nth-child(even) { background-color: #fafafa; }
+
+        .table-responsive {
+            overflow-x: auto;
+            margin-bottom: 20px;
+        }
+
+        .oculto { display: none !important; }
+        
+        /* Pantalla de Acceso Back Office */
+        #login-bo {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+
+        /* Estilos del Menú Lateral Sandwich y Reportes Dinámicos */
+        #sidebar-menu {
+            position: fixed;
+            top: 0;
+            left: -320px;
+            width: 300px;
+            height: 100%;
+            background: #ffffff;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.2);
+            transition: left 0.3s ease;
+            z-index: 1000;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        #sidebar-menu.open {
+            left: 0;
+        }
+        .hamburger-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: #6b21a8;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            z-index: 1001;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .pivot-config-box {
+            background: #f8f9fa;
+            border: 1px solid #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 0.9rem;
+        }
+        .dynamic-table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        table.dynamic-pivot-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 0.9rem;
+        }
+        table.dynamic-pivot-table th, table.dynamic-pivot-table td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        table.dynamic-pivot-table th {
+            background: #6b21a8;
+            color: white;
+        }
+        #resultado-dinamico-container {
+            display: block;
+            width: 100%;
+            margin-top: 30px;
+            border-top: 3px solid #6b21a8;
+            padding-top: 15px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 1. PANTALLA DE ACCESO AL BACK OFFICE -->
+    <div id="login-bo">
+        <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 110px; height: auto; margin-bottom: 15px;">
+        <h2>Back Office Analytics</h2>
+        <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Acceso restringido para supervisores</p>
+        <input type="password" id="bo-pass" placeholder="Contraseña de Administrador" style="width: 100%;">
+        <button id="btn-login-bo" style="width: 100%; margin-top: 10px;">Ingresar al Panel</button>
+        <p id="login-error" class="error" style="font-size: 0.85rem; margin-top: 10px; color: #e74c3c;"></p>
+    </div>
+
+    <!-- BOTÓN SANDWICH PARA MENÚ LATERAL (Oculto hasta iniciar sesión) -->
+    <button class="hamburger-btn oculto" id="btn-sandwich" onclick="toggleSidebar()">☰ Reportes Dinámicos</button>
+
+    <!-- MENÚ LATERAL DESLIZANTE -->
+    <div id="sidebar-menu">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; color: #6b21a8; border: none; padding: 0;">Generador Dinámico</h3>
+            <button onclick="toggleSidebar()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #666; width: auto; padding: 0;">✕</button>
+        </div>
+
+        <div class="pivot-config-box">
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">1. Filtrar por Rango de Fechas:</label>
+            <input type="date" id="sidebar-fecha-inicio" style="width: 100%; margin-bottom: 8px;">
+            <input type="date" id="sidebar-fecha-fin" style="width: 100%; margin-bottom: 10px;">
+
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Filtrar por Cadena:</label>
+            <select id="sidebar-cadena" style="width: 100%; margin-bottom: 8px;" onchange="poblarSelectSucursalesSidebar()">
+                <option value="">Todas las cadenas</option>
+            </select>
+
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Filtrar por Sucursal:</label>
+            <select id="sidebar-sucursal" style="width: 100%; margin-bottom: 0;">
+                <option value="">Todas las sucursales</option>
+            </select>
+        </div>
+
+        <div class="pivot-config-box">
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block;">2. Selector de Columnas:</label>
+            <div class="checkbox-grid">
+                <label><input type="checkbox" class="col-selector" value="fecha" checked> Fecha/Hora</label>
+                <label><input type="checkbox" class="col-selector" value="usuario" checked> Auditor</label>
+                <label><input type="checkbox" class="col-selector" value="cadena" checked> Cadena</label>
+                <label><input type="checkbox" class="col-selector" value="sucursal" checked> Sucursal</label>
+                <label><input type="checkbox" class="col-selector" value="comentarios" checked> Comentarios</label>
+                <label><input type="checkbox" class="col-selector" value="inventario" checked> Detalle Inv.</label>
+            </div>
+        </div>
+
+        <button onclick="generarReporteDinamicoSidebar()" style="background: #6b21a8; width: 100%; margin-top: 5px;">Generar Reporte Dinámico</button>
+        <button onclick="exportarTablaAExcel()" style="background: #28a745; width: 100%; margin-top: 10px;">Exportar a Excel 📊</button>
+    </div>
+
+    <!-- 2. CONTENEDOR PRINCIPAL DEL BACK OFFICE -->
+    <div id="bo-content" class="container oculto">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px;">
+            <div>
+                <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 90px; height: auto;">
+                <h2 style="margin: 5px 0 0 0;">Panel de Control y Analítica de Auditorías</h2>
+            </div>
+            <button onclick="cerrarSesionBO()" style="background: #e74c3c; width: auto; padding: 8px 15px;">Cerrar Sesión</button>
+        </div>
+
+        <!-- Barra de Filtros Globales -->
+        <div class="filters-bar">
+            <div>
+                <label style="font-size: 0.85rem; display: block; font-weight: bold;">Fecha Inicio:</label>
+                <input type="date" id="filtro-fecha-inicio">
+            </div>
+            <div>
+                <label style="font-size: 0.85rem; display: block; font-weight: bold;">Fecha Fin:</label>
+                <input type="date" id="filtro-fecha-fin">
+            </div>
+            <div>
+                <label style="font-size: 0.85rem; display: block; font-weight: bold;">Cadena:</label>
+                <select id="filtro-cadena" style="width: 160px;" onchange="actualizarFiltroSucursalesGlobal()">
+                    <option value="">Todas las cadenas</option>
+                </select>
+            </div>
+            <div>
+                <label style="font-size: 0.85rem; display: block; font-weight: bold;">Sucursal:</label>
+                <select id="filtro-sucursal" style="width: 180px;">
+                    <option value="">Todas las sucursales</option>
+                </select>
+            </div>
+            <div style="align-self: flex-end;">
+                <button onclick="cargarDatosAnalitica()" style="margin-bottom: 10px;">Filtrar / Actualizar</button>
+            </div>
+        </div>
+
+        <!-- KPIs Resumen -->
+        <div class="kpi-container">
+            <div class="kpi-card">
+                <h4>Total Auditorías Realizadas</h4>
+                <p class="value" id="kpi-total-auditorias">0</p>
+            </div>
+            <div class="kpi-card">
+                <h4>Sucursales Evaluadas</h4>
+                <p class="value" id="kpi-total-sucursales">0</p>
+            </div>
+            <div class="kpi-card">
+                <h4>Artículos Contados (Stock Total)</h4>
+                <p class="value" id="kpi-total-stock">0</p>
+            </div>
+        </div>
+
+        <!-- Sección Gráficas Analíticas -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>Auditorías por Día de la Semana</h3>
+                <canvas id="chartDiaSemana"></canvas>
+            </div>
+            <div class="chart-card">
+                <h3>Auditorías por Mes</h3>
+                <canvas id="chartMes"></canvas>
+            </div>
+        </div>
+
+        <!-- Sección Detalle de Inventario Histórico -->
+        <div style="margin-top: 30px;">
+            <h3>Detalle de Inventarios por Sucursal y Fechas</h3>
+            <div class="table-responsive">
+                <table id="tabla-inventarios">
+                    <thead>
+                        <tr>
+                            <th>Fecha / Hora</th>
+                            <th>Auditor</th>
+                            <th>Cadena</th>
+                            <th>Sucursal</th>
+                            <th>Comentarios</th>
+                            <th>Inventario Detallado (Prod - Cantidad)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-inventarios">
+                        <tr><td colspan="6" style="text-align: center;">Cargando registros...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Contenedor donde se renderizará el reporte dinámico generado -->
+        <div id="resultado-dinamico-container"></div>
+
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://snjvdfjouoxnaopgeral.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuanZkZmpvdW94bmFvcGdlcmFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTI2MzEsImV4cCI6MjEwMDc2ODYzMX0.CIrxhWZtySmv42iZfFGHgyavP6uxA44kbbBQlQNc8uc';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        const PASS_ADMIN = "Sey123";
+
+        let chartDiaInstance = null;
+        let chartMesInstance = null;
+        let cacheGlobalVisitas = [];
+        let cacheGlobalProductos = [];
+        let cacheGlobalSucursales = [];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const loginBo = document.getElementById("login-bo");
+            const boContent = document.getElementById("bo-content");
+            const btnLoginBo = document.getElementById("btn-login-bo");
+            const boPass = document.getElementById("bo-pass");
+            const loginError = document.getElementById("login-error");
+            const btnSandwich = document.getElementById("btn-sandwich");
+
+            if (sessionStorage.getItem("bo_auth") === "true") {
+                loginBo.style.display = "none";
+                boContent.classList.remove("oculto");
+                btnSandwich.classList.remove("oculto");
+                inicializarBackOffice();
+            }
+
+            btnLoginBo.addEventListener("click", () => {
+                if (boPass.value === PASS_ADMIN) {
+                    sessionStorage.setItem("bo_auth", "true");
+                    loginBo.style.display = "none";
+                    boContent.classList.remove("oculto");
+                    btnSandwich.classList.remove("oculto");
+                    inicializarBackOffice();
+                } else {
+                    loginError.textContent = "Contraseña incorrecta.";
+                }
+            });
+
+            boPass.addEventListener("keypress", (e) => {
+                if (e.key === 'Enter') btnLoginBo.click();
+            });
+        });
+
+        function cerrarSesionBO() {
+            sessionStorage.removeItem("bo_auth");
+            location.reload();
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar-menu');
+            sidebar.classList.toggle('open');
+            
+            if (sidebar.classList.contains('open')) {
+                document.getElementById('sidebar-fecha-inicio').value = document.getElementById('filtro-fecha-inicio').value;
+                document.getElementById('sidebar-fecha-fin').value = document.getElementById('filtro-fecha-fin').value;
+                document.getElementById('sidebar-cadena').value = document.getElementById('filtro-cadena').value;
+                poblarSelectSucursalesSidebar();
+                document.getElementById('sidebar-sucursal').value = document.getElementById('filtro-sucursal').value;
+            }
+        }
+
+        async function inicializarBackOffice() {
+            const hoy = new Date();
+            const hace30Dias = new Date();
+            hace30Dias.setDate(hoy.getDate() - 30);
+
+            const fechaInicioStr = hace30Dias.toISOString().split('T')[0];
+            const fechaFinStr = hoy.toISOString().split('T')[0];
+
+            document.getElementById('filtro-fecha-fin').value = fechaFinStr;
+            document.getElementById('filtro-fecha-inicio').value = fechaInicioStr;
+            document.getElementById('sidebar-fecha-fin').value = fechaFinStr;
+            document.getElementById('sidebar-fecha-inicio').value = fechaInicioStr;
+
+            await cargarCatalogosAuxiliares();
+            await cargarDatosAnalitica();
+        }
+
+        async function cargarCatalogosAuxiliares() {
+            try {
+                const { data: sucs, error: errSucs } = await supabaseClient.from('sucursales').select('*');
+                if (errSucs) throw errSucs;
+                cacheGlobalSucursales = sucs || [];
+
+                poblarSelectsCadenasYSucursales();
+
+                const { data: prods, error: errProds } = await supabaseClient.from('productos').select('*');
+                if (errProds) throw errProds;
+                cacheGlobalProductos = prods || [];
+
+            } catch (err) {
+                console.error("Error cargando catálogos auxiliares:", err);
+            }
+        }
+
+        function poblarSelectsCadenasYSucursales() {
+            const cadenasUnicas = [...new Set(cacheGlobalSucursales.map(s => s.cadena).filter(Boolean))].sort();
+
+            let cadenaOptions = '<option value="">Todas las cadenas</option>';
+            cadenasUnicas.forEach(c => {
+                cadenaOptions += `<option value="${c}">${c}</option>`;
+            });
+
+            document.getElementById('filtro-cadena').innerHTML = cadenaOptions;
+            document.getElementById('sidebar-cadena').innerHTML = cadenaOptions;
+
+            poblarSelectSucursalesGlobal();
+            poblarSelectSucursalesSidebar();
+        }
+
+        function poblarSelectSucursalesGlobal() {
+            const cadenaSeleccionada = document.getElementById('filtro-cadena').value;
+            const selectSucursal = document.getElementById('filtro-sucursal');
+            
+            let sucsFiltradas = cacheGlobalSucursales;
+            if (cadenaSeleccionada) {
+                sucsFiltradas = cacheGlobalSucursales.filter(s => s.cadena === cadenaSeleccionada);
+            }
+
+            let optionsHtml = '<option value="">Todas las sucursales</option>';
+            sucsFiltradas.forEach(s => {
+                optionsHtml += `<option value="${s.id}">${s.nombre_sucursal}</option>`;
+            });
+            selectSucursal.innerHTML = optionsHtml;
+        }
+
+        function poblarSelectSucursalesSidebar() {
+            const cadenaSeleccionada = document.getElementById('sidebar-cadena').value;
+            const selectSidebarSucursal = document.getElementById('sidebar-sucursal');
+            
+            let sucsFiltradas = cacheGlobalSucursales;
+            if (cadenaSeleccionada) {
+                sucsFiltradas = cacheGlobalSucursales.filter(s => s.cadena === cadenaSeleccionada);
+            }
+
+            let optionsHtml = '<option value="">Todas las sucursales</option>';
+            sucsFiltradas.forEach(s => {
+                optionsHtml += `<option value="${s.id}">${s.nombre_sucursal}</option>`;
+            });
+            selectSidebarSucursal.innerHTML = optionsHtml;
+        }
+
+        function actualizarFiltroSucursalesGlobal() {
+            document.getElementById('filtro-sucursal').value = "";
+            poblarSelectSucursalesGlobal();
+        }
+
+        async function cargarDatosAnalitica() {
+            try {
+                const fechaInicio = document.getElementById('filtro-fecha-inicio').value;
+                const fechaFin = document.getElementById('filtro-fecha-fin').value;
+                const sucursalIdFiltro = document.getElementById('filtro-sucursal').value;
+                const cadenaFiltro = document.getElementById('filtro-cadena').value;
+
+                let query = supabaseClient
+                    .from('visitas_auditoria')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (fechaInicio) query = query.gte('created_at', `${fechaInicio}T00:00:00`);
+                if (fechaFin) query = query.lte('created_at', `${fechaFin}T23:59:59`);
+                
+                if (sucursalIdFiltro) {
+                    query = query.eq('sucursal_id', sucursalIdFiltro);
+                } else if (cadenaFiltro) {
+                    const idsSucursalesCadena = cacheGlobalSucursales
+                        .filter(s => s.cadena === cadenaFiltro)
+                        .map(s => s.id);
+                    if (idsSucursalesCadena.length > 0) {
+                        query = query.in('sucursal_id', idsSucursalesCadena);
+                    } else {
+                        query = query.eq('sucursal_id', -999); 
+                    }
+                }
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                cacheGlobalVisitas = data || [];
+                procesarYRenderizarMetricas();
+
+            } catch (err) {
+                alert("Error al cargar los datos de auditoría: " + err.message);
+                console.error(err);
+            }
+        }
+
+        function procesarYRenderizarMetricas() {
+            const visitas = cacheGlobalVisitas;
+
+            document.getElementById('kpi-total-auditorias').textContent = visitas.length;
+
+            const sucursalesUnicas = new Set(visitas.map(v => v.sucursal_id));
+            document.getElementById('kpi-total-sucursales').textContent = sucursalesUnicas.size;
+
+            let stockTotalAcumulado = 0;
+            visitas.forEach(v => {
+                if (v.inventario && Array.isArray(v.inventario)) {
+                    v.inventario.forEach(item => {
+                        stockTotalAcumulado += (parseInt(item.cantidad) || 0);
+                    });
+                }
+            });
+            document.getElementById('kpi-total-stock').textContent = stockTotalAcumulado.toLocaleString();
+
+            const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const conteoDias = { 'Lunes': 0, 'Martes': 0, 'Miércoles': 0, 'Jueves': 0, 'Viernes': 0, 'Sábado': 0, 'Domingo': 0 };
+            const nombresMeses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            let conteoMeses = {};
+
+            visitas.forEach(v => {
+                const fecha = new Date(v.created_at);
+                if (!isNaN(fecha)) {
+                    const nombreDia = diasSemanaNombres[fecha.getDay()];
+                    if (conteoDias[nombreDia] !== undefined) conteoDias[nombreDia]++;
+                    const mesAnioKey = `${nombresMeses[fecha.getMonth()]} ${fecha.getFullYear()}`;
+                    conteoMeses[mesAnioKey] = (conteoMeses[mesAnioKey] || 0) + 1;
+                }
+            });
+
+            renderizarGraficaDiaSemana(conteoDias);
+            renderizarGraficaMeses(conteoMeses);
+            renderizarTablaInventarios(visitas);
+        }
+
+        function renderizarGraficaDiaSemana(conteoDias) {
+            const ctx = document.getElementById('chartDiaSemana').getContext('2d');
+            const labels = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+            const dataValues = labels.map(d => conteoDias[d]);
+
+            if (chartDiaInstance) chartDiaInstance.destroy();
+
+            chartDiaInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Número de Auditorías',
+                        data: dataValues,
+                        backgroundColor: '#6b21a8',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        }
+
+        function renderizarGraficaMeses(conteoMeses) {
+            const ctx = document.getElementById('chartMes').getContext('2d');
+            const labels = Object.keys(conteoMeses);
+            const dataValues = Object.values(conteoMeses);
+
+            if (chartMesInstance) chartMesInstance.destroy();
+
+            chartMesInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Auditorías por Mes',
+                        data: dataValues,
+                        borderColor: '#e6007e',
+                        backgroundColor: 'rgba(230, 0, 126, 0.1)',
+                        fill: true,
+                        tension: 0.2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        }
+
+        function renderizarTablaInventarios(visitas) {
+            const tbody = document.getElementById('tbody-inventarios');
+            tbody.innerHTML = '';
+
+            if (visitas.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #666;">No se encontraron registros con los filtros seleccionados.</td></tr>`;
+                return;
+            }
+
+            const mapaSucursales = {};
+            cacheGlobalSucursales.forEach(s => { mapaSucursales[s.id] = s; });
+
+            const mapaProductos = {};
+            cacheGlobalProductos.forEach(p => { mapaProductos[p.id] = p.nombre_producto || p.codigo_barras || 'Producto'; });
+
+            visitas.forEach(v => {
+                const fechaFormateada = new Date(v.created_at).toLocaleString();
+                const sucInfo = mapaSucursales[v.sucursal_id] || {};
+                const nombreSucursal = sucInfo.nombre_sucursal || 'Sucursal Desconocida';
+                const nombreCadena = sucInfo.cadena || 'General';
+                
+                let htmlInventarioDetalle = '<ul style="margin: 0; padding-left: 15px; font-size: 0.85rem;">';
+                if (v.inventario && Array.isArray(v.inventario) && v.inventario.length > 0) {
+                    v.inventario.forEach(item => {
+                        const nombreProd = mapaProductos[item.producto_id] || 'ID: ' + item.producto_id.substring(0, 8);
+                        htmlInventarioDetalle += `<li><b>${nombreProd}</b>: ${item.cantidad} unidades</li>`;
+                    });
+                } else {
+                    htmlInventarioDetalle += `<li>Sin inventario registrado</li>`;
+                }
+                htmlInventarioDetalle += '</ul>';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${fechaFormateada}</td>
+                    <td><b>${v.usuario || 'Anónimo'}</b></td>
+                    <td><span style="background: #f3e8ff; color: #6b21a8; padding: 3px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8rem;">${nombreCadena}</span></td>
+                    <td>${nombreSucursal}</td>
+                    <td>${v.comentarios || 'Sin comentarios'}</td>
+                    <td>${htmlInventarioDetalle}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function generarReporteDinamicoSidebar() {
+            try {
+                const fechaInicio = document.getElementById('sidebar-fecha-inicio').value;
+                const fechaFin = document.getElementById('sidebar-fecha-fin').value;
+                const cadenaFiltro = document.getElementById('sidebar-cadena').value;
+                const sucursalIdFiltro = document.getElementById('sidebar-sucursal').value;
+
+                let query = supabaseClient
+                    .from('visitas_auditoria')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+
+                if (fechaInicio) query = query.gte('created_at', `${fechaInicio}T00:00:00`);
+                if (fechaFin) query = query.lte('created_at', `${fechaFin}T23:59:59`);
+                
+                if (sucursalIdFiltro) {
+                    query = query.eq('sucursal_id', sucursalIdFiltro);
+                } else if (cadenaFiltro) {
+                    const idsSucursalesCadena = cacheGlobalSucursales
+                        .filter(s => s.cadena === cadenaFiltro)
+                        .map(s => s.id);
+                    if (idsSucursalesCadena.length > 0) {
+                        query = query.in('sucursal_id', idsSucursalesCadena);
+                    } else {
+                        query = query.eq('sucursal_id', -999);
+                    }
+                }
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                const columnasSeleccionadas = Array.from(document.querySelectorAll('.col-selector:checked')).map(cb => cb.value);
+
+                construirTablaDinamicaHTML(data || [], columnasSeleccionadas);
+                toggleSidebar(); 
+
+                // Desplazar automáticamente la pantalla hacia el reporte generado
+                setTimeout(() => {
+                    const contenedorResultado = document.getElementById('resultado-dinamico-container');
+                    contenedorResultado.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 200);
+
+            } catch (err) {
+                alert("Error al generar el reporte dinámico: " + err.message);
+                console.error(err);
+            }
+        }
+
+        function construirTablaDinamicaHTML(registros, columnas) {
+            let contenedorTabla = document.getElementById('resultado-dinamico-container');
+            
+            if (!registros || registros.length === 0) {
+                contenedorTabla.innerHTML = '<h3>Reporte Dinámico Personalizado</h3><p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No se encontraron registros con los filtros seleccionados en el menú lateral.</p>';
+                return;
+            }
+
+            const mapaSucursales = {};
+            cacheGlobalSucursales.forEach(s => { mapaSucursales[s.id] = s; });
+
+            const mapaProductos = {};
+            cacheGlobalProductos.forEach(p => { mapaProductos[p.id] = p.nombre_producto || p.codigo_barras || 'Producto'; });
+
+            let html = '<h3>Reporte Dinámico Personalizado</h3>';
+            html += '<div class="dynamic-table-container"><table class="dynamic-pivot-table" id="tabla-exportable"><thead><tr>';
+
+            if (columnas.includes('fecha')) html += '<th>Fecha y Hora</th>';
+            if (columnas.includes('usuario')) html += '<th>Auditor</th>';
+            if (columnas.includes('cadena')) html += '<th>Cadena</th>';
+            if (columnas.includes('sucursal')) html += '<th>Sucursal</th>';
+            if (columnas.includes('comentarios')) html += '<th>Comentarios</th>';
+            if (columnas.includes('inventario')) html += '<th>Detalle de Inventario</th>';
+            html += '</tr></thead><tbody>';
+
+            registros.forEach(reg => {
+                const sucInfo = mapaSucursales[reg.sucursal_id] || {};
+                const nombreSucursal = sucInfo.nombre_sucursal || 'Sin asignar';
+                const nombreCadena = sucInfo.cadena || 'General';
+
+                html += '<tr>';
+                if (columnas.includes('fecha')) {
+                    html += `<td>${new Date(reg.created_at).toLocaleString()}</td>`;
+                }
+                if (columnas.includes('usuario')) {
+                    html += `<td>${reg.usuario || 'Anónimo'}</td>`;
+                }
+                if (columnas.includes('cadena')) {
+                    html += `<td><b>${nombreCadena}</b></td>`;
+                }
+                if (columnas.includes('sucursal')) {
+                    html += `<td>${nombreSucursal}</td>`;
+                }
+                if (columnas.includes('comentarios')) {
+                    html += `<td>${reg.comentarios || ''}</td>`;
+                }
+                if (columnas.includes('inventario')) {
+                    let invTexto = (reg.inventario || []).map(item => {
+                        const nombreProd = mapaProductos[item.producto_id] || 'Prod ID: ' + item.producto_id.substring(0, 8);
+                        return `${nombreProd}: ${item.cantidad} u`;
+                    }).join('<br>');
+                    html += `<td>${invTexto || 'Sin inventario'}</td>`;
+                }
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            contenedorTabla.innerHTML = html;
+        }
+
+        function exportarTablaAExcel() {
+            const tabla = document.getElementById('tabla-exportable');
+            if (!tabla) {
+                alert('Primero genera un reporte dinámico desde el menú lateral antes de exportarlo a Excel.');
+                return;
+            }
+
+            const wb = XLSX.utils.table_to_book(tabla, { sheet: "Reporte Dinámico" });
+            XLSX.writeFile(wb, `Reporte_Dinamico_Auditoria_${new Date().toISOString().slice(0,10)}.xlsx`);
+        }
+    </script>
+</body>
+</html>
