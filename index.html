@@ -32,8 +32,28 @@
 
         h2 { color: #6b21a8; margin-top: 0; }
         h3 { color: #333333; }
-        button { background: #6b21a8; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; width: 100%; font-size: 16px; margin-top: 10px; font-weight: bold; }
+        
+        /* Estilos actualizados para unificar los botones con la misma estilización */
+        button { 
+            background: #6b21a8; 
+            color: white; 
+            border: none; 
+            padding: 10px 15px; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            width: 100%; 
+            font-size: 16px; 
+            margin-top: 10px; 
+            font-weight: bold; 
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            text-decoration: none;
+            transition: background 0.2s ease;
+        }
         button:hover { background: #551a8b; }
+
         select, input[type="text"], input[type="number"], input[type="file"], textarea { width: 100%; padding: 10px; margin-top: 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
         textarea { resize: vertical; height: 100px; }
         .success { color: green; font-weight: bold; }
@@ -71,6 +91,8 @@
             border-radius: 6px;
             margin-bottom: 20px;
             border: 1px solid #eee;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         .producto-item {
             background: #fdfdfd;
@@ -115,10 +137,13 @@
     <!-- 2. CONTENEDOR PRINCIPAL DE LA APP (PASO A PASO) -->
     <div id="app-content" class="container oculto">
         
-        <!-- Barra superior con bienvenida y botón de salir -->
+        <!-- Barra superior con bienvenida, botón de auditorías y botón de salir -->
         <div class="app-header-bar">
             <span id="welcome-msg" style="font-weight: bold; color: #444;"></span>
-            <button id="btn-logout" style="background: #e74c3c; width: auto; padding: 5px 12px; margin-top: 0; font-size: 0.85rem;">Salir</button>
+            <div style="display: flex; gap: 8px;">
+                <button onclick="window.location.href='misauditorias.html'" style="background: #2563eb; width: auto; padding: 5px 12px; margin-top: 0; font-size: 0.85rem;">📋 Mis Auditorías</button>
+                <button id="btn-logout" style="background: #e74c3c; width: auto; padding: 5px 12px; margin-top: 0; font-size: 0.85rem;">Salir</button>
+            </div>
         </div>
 
         <!-- VISTA 1: REGISTRO / SELECCIÓN DE SUCURSAL -->
@@ -230,12 +255,10 @@
         window.nombreSucursalSeleccionada = "";
         window.cadenaActiva = ""; 
 
-        // Almacenamiento temporal para los archivos comprimidos (Blobs)
         window.archivoFotoSucursal = null;
         window.archivosAnaquel = [];
         window.archivosAcciones = [];
 
-        // Función utilitaria para comprimir y convertir una imagen a formato WebP usando Canvas API
         function comprimirImagenWebP(file, maxWidth = 1280, quality = 0.80) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -260,7 +283,6 @@
 
                         canvas.toBlob((blob) => {
                             if (blob) {
-                                // Cambiamos la extensión del nombre original a .webp
                                 const nombreWebp = file.name.replace(/\.[^/.]+$/, "") + ".webp";
                                 const archivoComprimido = new File([blob], nombreWebp, {
                                     type: 'image/webp',
@@ -279,7 +301,6 @@
             });
         }
 
-        // Control de Sesión de Login al cargar la página
         document.addEventListener("DOMContentLoaded", () => {
             const loginScreen = document.getElementById("login-screen");
             const appContent = document.getElementById("app-content");
