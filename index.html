@@ -260,7 +260,6 @@
 
                         canvas.toBlob((blob) => {
                             if (blob) {
-                                // Devolvemos un nuevo File con el blob comprimido manteniendo el nombre original
                                 const archivoComprimido = new File([blob], file.name, {
                                     type: 'image/jpeg',
                                     lastModified: Date.now()
@@ -461,7 +460,6 @@
             document.getElementById('contenedor-btn-continuar').classList.remove('oculto');
         }
 
-        // Manejador y compresor para la foto de la nueva sucursal
         async function manejarFotoSucursal(event) {
             const archivoOriginal = event.target.files[0];
             const contenedor = document.getElementById('contenedor-preview-sucursal');
@@ -470,7 +468,6 @@
 
             if (archivoOriginal) {
                 try {
-                    // Comprimir la imagen antes de guardarla en memoria
                     const archivoComprimido = await comprimirImagen(archivoOriginal);
                     window.archivoFotoSucursal = archivoComprimido;
 
@@ -485,7 +482,6 @@
             }
         }
 
-        // Validador y gestor visual optimizado con compresión para imágenes múltiples
         async function manejarSeleccionImagenes(tipo, min, max) {
             const input = document.getElementById(tipo === 'anaquel' ? 'input-evidencias-anaquel' : 'input-acciones-hechas');
             const previewContainer = document.getElementById(tipo === 'anaquel' ? 'preview-anaquel' : 'preview-acciones');
@@ -641,7 +637,6 @@
             }
         }
 
-        // Función auxiliar para subir un arreglo de imágenes a un bucket específico de Supabase Storage
         async function subirImágenesABucket(archivosArray, nombreBucket) {
             let urlsSubidas = [];
 
@@ -673,7 +668,6 @@
             const inputsStock = document.querySelectorAll('.input-stock');
             const usuarioActual = localStorage.getItem("sey_user") || "Anónimo";
 
-            // Validaciones de cantidad de fotos requeridas antes de enviar
             if (window.archivosAnaquel.length < 2 || window.archivosAnaquel.length > 5) {
                 alert('Debes adjuntar de 2 a 5 fotografías en "Evidencias de Anaquel".');
                 return;
@@ -692,13 +686,9 @@
             try {
                 alert("Subiendo evidencias optimizadas a la nube, por favor espera un momento...");
 
-                // 1. Subir evidencias de anaquel al bucket 'anaquel-evidencias'
                 const urlsAnaquel = await subirImágenesABucket(window.archivosAnaquel, 'anaquel-evidencias');
-
-                // 2. Subir acciones implementadas al bucket 'acciones-mejoras'
                 const urlsAcciones = await subirImágenesABucket(window.archivosAcciones, 'acciones-mejoras');
 
-                // 3. Recolectar datos de inventario
                 let inventarioData = [];
                 inputsStock.forEach(input => {
                     const productoId = input.getAttribute('data-product-id');
@@ -709,7 +699,6 @@
                     });
                 });
 
-                // 4. Inserción de datos en la tabla 'visitas_auditoria' de Supabase
                 const { error: insertError } = await supabaseClient
                     .from('visitas_auditoria')
                     .insert([{

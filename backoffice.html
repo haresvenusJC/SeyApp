@@ -509,7 +509,14 @@
     <script>
         const SUPABASE_URL = 'https://snjvdfjouoxnaopgeral.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuanZkZmpvdW94bmFvcGdlcmFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTI2MzEsImV4cCI6MjEwMDc2ODYzMX0.CIrxhWZtySmv42iZfFGHgyavP6uxA44kbbBQlQNc8uc';
-        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        
+        // Inicialización segura con manejo de excepciones para móviles
+        let supabaseClient;
+        try {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (e) {
+            console.error("Error al inicializar el cliente de Supabase:", e);
+        }
 
         const PASS_ADMIN = "Sey123";
 
@@ -531,28 +538,37 @@
             const loginError = document.getElementById("login-error");
             const btnSandwich = document.getElementById("btn-sandwich");
 
+            // Validación robusta de sesión
             if (sessionStorage.getItem("bo_auth") === "true") {
-                loginBo.style.display = "none";
-                boContent.classList.remove("oculto");
-                btnSandwich.classList.remove("oculto");
-                inicializarBackOffice();
+                if (loginBo) loginBo.style.display = "none";
+                if (boContent) boContent.classList.remove("oculto");
+                if (btnSandwich) btnSandwich.classList.remove("oculto");
+                
+                // Pequeño retardo para asegurar que el DOM esté completamente listo en Safari/iOS
+                setTimeout(() => {
+                    inicializarBackOffice();
+                }, 50);
             }
 
-            btnLoginBo.addEventListener("click", () => {
-                if (boPass.value === PASS_ADMIN) {
-                    sessionStorage.setItem("bo_auth", "true");
-                    loginBo.style.display = "none";
-                    boContent.classList.remove("oculto");
-                    btnSandwich.classList.remove("oculto");
-                    inicializarBackOffice();
-                } else {
-                    loginError.textContent = "Contraseña incorrecta.";
-                }
-            });
+            if (btnLoginBo) {
+                btnLoginBo.addEventListener("click", () => {
+                    if (boPass && boPass.value === PASS_ADMIN) {
+                        sessionStorage.setItem("bo_auth", "true");
+                        if (loginBo) loginBo.style.display = "none";
+                        if (boContent) boContent.classList.remove("oculto");
+                        if (btnSandwich) btnSandwich.classList.remove("oculto");
+                        inicializarBackOffice();
+                    } else {
+                        if (loginError) loginError.textContent = "Contraseña incorrecta.";
+                    }
+                });
+            }
 
-            boPass.addEventListener("keypress", (e) => {
-                if (e.key === 'Enter') btnLoginBo.click();
-            });
+            if (boPass) {
+                boPass.addEventListener("keypress", (e) => {
+                    if (e.key === 'Enter' && btnLoginBo) btnLoginBo.click();
+                });
+            }
         });
 
         function cerrarSesionBO() {
@@ -562,14 +578,20 @@
 
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar-menu');
+            if (!sidebar) return;
             sidebar.classList.toggle('open');
             
             if (sidebar.classList.contains('open')) {
-                document.getElementById('sidebar-fecha-inicio').value = document.getElementById('filtro-fecha-inicio').value;
-                document.getElementById('sidebar-fecha-fin').value = document.getElementById('filtro-fecha-fin').value;
-                document.getElementById('sidebar-cadena').value = document.getElementById('filtro-cadena').value;
+                const fInicio = document.getElementById('filtro-fecha-inicio');
+                const fFin = document.getElementById('filtro-fecha-fin');
+                const fCadena = document.getElementById('filtro-cadena');
+                const fSucursal = document.getElementById('filtro-sucursal');
+
+                if (fInicio) document.getElementById('sidebar-fecha-inicio').value = fInicio.value;
+                if (fFin) document.getElementById('sidebar-fecha-fin').value = fFin.value;
+                if (fCadena) document.getElementById('sidebar-cadena').value = fCadena.value;
                 poblarSelectSucursalesSidebar();
-                document.getElementById('sidebar-sucursal').value = document.getElementById('filtro-sucursal').value;
+                if (fSucursal) document.getElementById('sidebar-sucursal').value = fSucursal.value;
             }
         }
 
