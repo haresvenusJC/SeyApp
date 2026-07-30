@@ -60,7 +60,10 @@
         .info { color: #6b21a8; font-weight: bold; }
         .map-link { display: inline-block; margin-top: 5px; color: #6b21a8; text-decoration: none; font-weight: bold; }
         .map-link:hover { text-decoration: underline; }
-        .oculto { display: none; }
+        
+        /* Prioridad absoluta para ocultar elementos por defecto */
+        .oculto { display: none !important; }
+
         .preview-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
         .preview-thumb { width: 80px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #ccc; }
         
@@ -126,7 +129,7 @@
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.75);
-            display: flex;
+            /* Quitamos display flex genérico para que respete el oculto nativo */
             justify-content: center;
             align-items: center;
             z-index: 9999;
@@ -171,8 +174,8 @@
 </head>
 <body>
 
-    <!-- OVERLAY DE CARGA / BARRA DE PROGRESO -->
-    <div id="upload-overlay" class="oculto">
+    <!-- OVERLAY DE CARGA / BARRA DE PROGRESO (Forzado a ocultarse al cargar la página) -->
+    <div id="upload-overlay" class="oculto" style="display: none;">
         <div class="upload-card">
             <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="max-width: 80px; height: auto; margin-bottom: 10px;">
             <h3>Subiendo Información</h3>
@@ -325,7 +328,7 @@
         window.archivosAnaquel = [];
         window.archivosAcciones = [];
 
-        // Funciones de control de la barra de progreso visual
+        // Funciones de control de la barra de progreso visual (se despliega solo al enviar)
         function mostrarProgreso(texto, porcentaje) {
             const overlay = document.getElementById('upload-overlay');
             const statusText = document.getElementById('upload-status-text');
@@ -333,6 +336,7 @@
             const pctText = document.getElementById('upload-percentage');
 
             overlay.classList.remove('oculto');
+            overlay.style.display = 'flex'; // Forzamos display flex al activarlo
             statusText.textContent = texto;
             fill.style.width = `${porcentaje}%`;
             pctText.textContent = `${porcentaje}%`;
@@ -341,6 +345,7 @@
         function ocultarProgreso() {
             const overlay = document.getElementById('upload-overlay');
             overlay.classList.add('oculto');
+            overlay.style.display = 'none';
         }
 
         function comprimirImagenWebP(file, maxWidth = 1280, quality = 0.80) {
@@ -785,7 +790,6 @@
             }
         }
 
-        // Función mejorada con cálculo de porcentaje dinámico para la barra de progreso
         async function subirImágenesABucketConProgreso(archivosArray, nombreBucket, porcentajeInicio, porcentajeFin) {
             let urlsSubidas = [];
             const total = archivosArray.length;
@@ -793,8 +797,8 @@
 
             for (let i = 0; i < total; i++) {
                 let archivo = archivosArray[i];
-                let porcentajeActual = Math.round(porcentajeInicio + (i / total) * rangoSpan);
-                mostrarProgreso(`Subiendo imagen ${i + 1} de ${total} (${nombreBucket})...`, porcentajeActual);
+                let porcentajeActual = Math.round(porcentajeInicio + ((i + 1) / total) * rangoSpan);
+                mostrarProgreso(`Subiendo imagen ${i + 1} de ${total} al apartado de ${nombreBucket}...`, porcentajeActual);
 
                 const nombreArchivoUnico = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${archivo.name.replace(/\s+/g, '_')}`;
 
@@ -839,16 +843,17 @@
             }
 
             try {
-                // Iniciar barra de progreso visual (0%)
-                mostrarProgreso("Iniciando subida de evidencias...", 5);
+                // 1. Mostrar la barra de progreso inmediatamente en 5% antes de iniciar
+                mostrarProgreso("Preparando archivos y conectando con el servidor...", 5);
 
-                // Subir fotos de anaquel (Rango 5% al 45%)
-                const urlsAnaquel = await subirImágenesABucketConProgreso(window.archivosAnaquel, 'anaquel-evidencias', 5, 45);
+                // 2. Subir fotos de anaquel (Rango del 10% al 45%)
+                const urlsAnaquel = await subirImágenesABucketConProgreso(window.archivosAnaquel, 'anaquel-evidencias', 10, 45);
 
-                // Subir fotos de acciones (Rango 45% al 85%)
-                const urlsAcciones = await subirImágenesABucketConProgreso(window.archivosAcciones, 'acciones-mejoras', 45, 85);
+                // 3. Subir fotos de acciones (Rango del 45% al 80%)
+                const urlsAcciones = await subirImágenesABucketConProgreso(window.archivosAcciones, 'acciones-mejoras', 45, 80);
 
-                mostrarProgreso("Guardando registros en la base de datos...", 90);
+                // 4. Guardar inventario y texto en la base de datos (90%)
+                mostrarProgreso("Guardando inventario y reporte en la base de datos...", 90);
 
                 let inventarioData = [];
                 inputsStock.forEach(input => {
@@ -873,11 +878,12 @@
 
                 if (insertError) throw insertError;
 
-                mostrarProgreso("¡Completado con éxito!", 100);
+                // 5. Finalizado con éxito (100%)
+                mostrarProgreso("¡Visita guardada con éxito!", 100);
 
                 setTimeout(() => {
                     ocultarProgreso();
-                    alert("¡Visita, inventario y evidencias WebP registradas y subidas correctamente!");
+                    alert("¡Visita, inventario y evidencias registradas correctamente!");
                     location.reload();
                 }, 500);
 
