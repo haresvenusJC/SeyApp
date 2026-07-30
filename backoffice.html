@@ -21,7 +21,7 @@
             color: #333; 
             display: flex;
             justify-content: center;
-            align-items: flex-start;
+            align-items: center;
         }
 
         .container { 
@@ -130,9 +130,9 @@
             align-items: center;
             justify-content: center;
             width: 100%;
-            max-width: 400px;
+            max-width: 380px;
             background: white;
-            padding: 30px;
+            padding: 35px 30px;
             border-radius: 12px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.2);
             text-align: center;
@@ -231,7 +231,6 @@
         .btn-link-accion { background: #28a745; }
         .btn-link-accion:hover { background: #218838; }
 
-        /* Estilo profesional para la mini-tabla de inventario en celda */
         .tabla-inventario-mini {
             width: 100%;
             border-collapse: collapse;
@@ -276,7 +275,6 @@
             padding-right: 2px;
         }
 
-        /* Modal Galería Visor con Botones de Navegación */
         #modal-visor {
             position: fixed;
             top: 0;
@@ -362,7 +360,10 @@
 
     <!-- 1. PANTALLA DE ACCESO AL BACK OFFICE -->
     <div id="login-bo">
-        <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 110px; height: auto; margin-bottom: 15px;">
+        <div style="width: 120px; height: auto; margin-bottom: 15px; display: flex; justify-content: center; align-items: center;">
+            <!-- Logo Sey desde Supabase -->
+            <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="width: 120px; height: auto; display: block;">
+        </div>
         <h2>Back Office Analytics</h2>
         <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Acceso restringido para supervisores</p>
         <input type="password" id="bo-pass" placeholder="Contraseña de Administrador" style="width: 100%;">
@@ -416,9 +417,9 @@
     <!-- 2. CONTENEDOR PRINCIPAL DEL BACK OFFICE -->
     <div id="bo-content" class="container oculto">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px;">
-            <div>
-                <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 90px; height: auto;">
-                <h2 style="margin: 5px 0 0 0;">Panel de Control y Analítica de Auditorías</h2>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="width: 90px; height: auto; display: block;">
+                <h2 style="margin: 0;">Panel de Control y Analítica de Auditorías</h2>
             </div>
             <button onclick="cerrarSesionBO()" style="background: #e74c3c; width: auto; padding: 8px 15px;">Cerrar Sesión</button>
         </div>
@@ -510,7 +511,6 @@
         const SUPABASE_URL = 'https://snjvdfjouoxnaopgeral.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuanZkZmpvdW94bmFvcGdlcmFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTI2MzEsImV4cCI6MjEwMDc2ODYzMX0.CIrxhWZtySmv42iZfFGHgyavP6uxA44kbbBQlQNc8uc';
         
-        // Inicialización segura con manejo de excepciones para móviles
         let supabaseClient;
         try {
             supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -538,13 +538,11 @@
             const loginError = document.getElementById("login-error");
             const btnSandwich = document.getElementById("btn-sandwich");
 
-            // Validación robusta de sesión
             if (sessionStorage.getItem("bo_auth") === "true") {
                 if (loginBo) loginBo.style.display = "none";
                 if (boContent) boContent.classList.remove("oculto");
                 if (btnSandwich) btnSandwich.classList.remove("oculto");
                 
-                // Pequeño retardo para asegurar que el DOM esté completamente listo en Safari/iOS
                 setTimeout(() => {
                     inicializarBackOffice();
                 }, 50);
@@ -847,7 +845,6 @@
                 const nombreSucursal = sucInfo.nombre_sucursal || 'Sucursal Desconocida';
                 const nombreCadena = sucInfo.cadena || 'General';
                 
-                // Evidencias / Acciones
                 let htmlEvidencias = '';
                 const urlsAnaquel = procesarUrlsEvidencia(v.fotos_anaquel, 'anaquel-evidencias');
                 if (urlsAnaquel.length > 0) {
@@ -865,7 +862,6 @@
                     htmlEvidencias = '<span style="color: #888; font-size: 0.85rem;">Sin archivos</span>';
                 }
 
-                // --- DISEÑO PROFESIONAL DE LA MINI-TABLA DE INVENTARIO ---
                 let htmlInventarioDetalle = '<div class="inventario-scroll-box"><table class="tabla-inventario-mini"><thead><tr><th>Producto</th><th style="text-align:right; width:55px;">Cant.</th></tr></thead><tbody>';
                 
                 if (v.inventario && Array.isArray(v.inventario) && v.inventario.length > 0) {

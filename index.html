@@ -125,8 +125,9 @@
     <!-- 1. PANTALLA DE LOGIN / BIENVENIDA -->
     <div id="login-screen">
         <div class="login-card">
-            <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 120px; height: auto; margin-bottom: 15px;">
-            <h2 style="margin-bottom: 5px; color: #333;">¡Bienvenido a Sey!</h2>
+            <!-- Logo utilizando la URL pública de Supabase -->
+            <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="max-width: 120px; height: auto; margin-bottom: 15px;">
+            <h2 style="margin-bottom: 5px; color: #333;">¡Bienvenido!</h2>
             <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Ingresa tu nombre para continuar</p>
             
             <input type="text" id="user-name" placeholder="Tu Nombre o Usuario">
@@ -141,7 +142,7 @@
         <div class="app-header-bar">
             <span id="welcome-msg" style="font-weight: bold; color: #444;"></span>
             <div style="display: flex; gap: 8px;">
-                <button onclick="window.location.href='misauditorias.html'" style="background: #2563eb; width: auto; padding: 5px 12px; margin-top: 0; font-size: 0.85rem;">📋 Mis Auditorías</button>
+                <button onclick="window.location.href='misauditorias.html'" style="background: #2563eb; width: auto; padding: 5px 12px; margin-top: 0; font-size: 0.85rem;">📋 Mis visitas</button>
                 <button id="btn-logout" style="background: #e74c3c; width: auto; padding: 5px 12px; margin-top: 0; font-size: 0.85rem;">Salir</button>
             </div>
         </div>
@@ -149,9 +150,9 @@
         <!-- VISTA 1: REGISTRO / SELECCIÓN DE SUCURSAL -->
         <div id="vista-sucursal">
             <div style="text-align: center; margin-bottom: 15px;">
-                <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 100px; height: auto;">
-                <h2>Registro de auditoría</h2>
-                <p>Sistema de campo para control de inventarios y visitas.</p>
+                <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="max-width: 100px; height: auto;">
+                <h2>Registro de visita</h2>
+                <p>Control de inventarios y visitas.</p>
             </div>
             
             <hr>
@@ -175,7 +176,7 @@
 
             <!-- Formulario oculto en caso de que no exista y deba registrarse (con foto) -->
             <div id="form-nueva-sucursal" class="oculto" style="margin-top: 15px; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
-                <p class="info">📍 ¿No aparece en la lista de arriba? Da de alta esta nueva ubicación:</p>
+                <p class="info">📍 ¿No aparece en la lista de arriba? Da de alta esta nueva sucursal:</p>
                 
                 <label>Nombre Específico de la Sucursal:</label>
                 <input type="text" id="input-nombre-nueva" placeholder="Ej. HEB Las Torres">
@@ -198,7 +199,7 @@
         <!-- VISTA 2: CAPTURA DE INVENTARIO Y EVIDENCIAS -->
         <div id="vista-inventario" class="oculto">
             <div style="text-align: center; margin-bottom: 15px;">
-                <img src="https://pictures.sey.mx/menu/logo-2.svg" alt="Sey Logo" style="max-width: 90px; height: auto;">
+                <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="max-width: 90px; height: auto;">
                 <h2>Captura de Auditoría</h2>
                 <p id="info-sucursal-activa" class="info"></p>
             </div>
