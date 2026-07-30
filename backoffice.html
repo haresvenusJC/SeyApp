@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Back Office - Análisis de Auditorías</title>
+    
     <!-- SDK de Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Librería de Gráficas Chart.js -->
@@ -372,7 +373,7 @@
             <input type="text" id="login-usuario" class="login-input" placeholder="Usuario" required autocomplete="username">
             <input type="password" id="login-password" class="login-input" placeholder="Contraseña" required autocomplete="current-password">
             <button type="submit" class="login-btn">Entrar</button>
-            <p id="login-error" class="error-login">Usuario o contraseña incorrectos</p>
+            <p id="login-error" class="error-login">Acceso denegado. Se requiere rol de Administrador.</p>
         </form>
     </div>
 
@@ -438,7 +439,10 @@
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px;">
             <div style="display: flex; align-items: center; gap: 20px;">
                 <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="width: 90px; height: auto; display: block;">
-                <h2 style="margin: 0;">Panel de Control y Analítica de Auditorías</h2>
+                <div>
+                    <h2 style="margin: 0;">Panel de Control y Analítica de Auditorías</h2>
+                    <span id="label-usuario-rol" style="font-size: 0.85rem; color: #6b21a8; font-weight: bold;"></span>
+                </div>
             </div>
             <button onclick="cerrarSesion()" style="background: #e6007e; padding: 8px 12px; font-size: 0.9rem;">Cerrar Sesión</button>
         </div>
@@ -547,7 +551,25 @@
         let galeriaIndiceActual = 0;
         let galeriaTituloBase = '';
 
-        // Función para manejar el inicio de sesión consultando Supabase
+        // Validar sesión al cargar la página si ya estaba iniciada y sigue siendo admin
+        window.addEventListener('DOMContentLoaded', () => {
+            const sesionActiva = sessionStorage.getItem('bo_sesion_activa');
+            const rol = sessionStorage.getItem('bo_rol');
+            if (sesionActiva === 'true' && rol === 'admin') {
+                const usuario = sessionStorage.getItem('bo_usuario') || 'Usuario';
+                
+                document.getElementById('login-container').classList.add('oculto');
+                document.getElementById('bo-content').classList.remove('oculto');
+                document.getElementById('btn-sandwich').classList.remove('oculto');
+                document.getElementById('label-usuario-rol').textContent = `Usuario: ${usuario} (ADMIN)`;
+                
+                inicializarBackOffice();
+            } else {
+                cerrarSesion();
+            }
+        });
+
+        // Función para manejar el inicio de sesión validando estrictamente el rol 'admin'
         async function manejarLogin(event) {
             event.preventDefault();
             const usuarioInput = document.getElementById('login-usuario').value.trim();
@@ -557,7 +579,7 @@
             errorMsg.style.display = 'none';
 
             try {
-                // Consulta la tabla 'usuarios_bo' creada en Supabase
+                // Consulta la tabla 'usuarios_bo' verificando credenciales
                 const { data, error } = await supabaseClient
                     .from('usuarios_bo')
                     .select('*')
@@ -568,13 +590,27 @@
                 if (error) throw error;
 
                 if (data) {
-                    // Login exitoso: Ocultar login y mostrar panel principal
-                    document.getElementById('login-container').classList.add('oculto');
-                    document.getElementById('bo-content').classList.remove('oculto');
-                    document.getElementById('btn-sandwich').classList.remove('oculto');
-                    
-                    inicializarBackOffice();
+                    // Validar estrictamente si el rol es 'admin'
+                    if (data.rol === 'admin') {
+                        sessionStorage.setItem('bo_sesion_activa', 'true');
+                        sessionStorage.setItem('bo_usuario', data.usuario);
+                        sessionStorage.setItem('bo_rol', 'admin');
+
+                        document.getElementById('label-usuario-rol').textContent = `Usuario: ${data.usuario} (ADMIN)`;
+
+                        // Login exitoso: Ocultar login y mostrar panel principal
+                        document.getElementById('login-container').classList.add('oculto');
+                        document.getElementById('bo-content').classList.remove('oculto');
+                        document.getElementById('btn-sandwich').classList.remove('oculto');
+                        
+                        inicializarBackOffice();
+                    } else {
+                        // Si el usuario existe pero NO es admin, se bloquea el acceso
+                        errorMsg.textContent = "Acceso denegado: Se requiere rol de Administrador.";
+                        errorMsg.style.display = 'block';
+                    }
                 } else {
+                    errorMsg.textContent = "Usuario o contraseña incorrectos.";
                     errorMsg.style.display = 'block';
                 }
             } catch (err) {
@@ -585,6 +621,9 @@
         }
 
         function cerrarSesion() {
+            sessionStorage.removeItem('bo_sesion_activa');
+            sessionStorage.removeItem('bo_usuario');
+            sessionStorage.removeItem('bo_rol');
             document.getElementById('bo-content').classList.add('oculto');
             document.getElementById('btn-sandwich').classList.add('oculto');
             document.getElementById('sidebar-menu').classList.remove('open');
