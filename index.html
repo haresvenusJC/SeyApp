@@ -33,7 +33,6 @@
         h2 { color: #6b21a8; margin-top: 0; }
         h3 { color: #333333; }
         
-        /* Estilos actualizados para unificar los botones con la misma estilización */
         button { 
             background: #6b21a8; 
             color: white; 
@@ -118,9 +117,73 @@
             border-radius: 8px;
             margin-bottom: 20px;
         }
+
+        /* Overlay y estilos de la Barra de Progreso de Subida */
+        #upload-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        .upload-card {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 8px;
+            overflow: hidden;
+            height: 22px;
+            margin: 20px 0 10px 0;
+            border: 1px solid #ccc;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #6b21a8, #e6007e);
+            border-radius: 6px 0 0 6px;
+            transition: width 0.3s ease;
+        }
+        #upload-status-text {
+            font-size: 0.95rem;
+            color: #444;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        #upload-percentage {
+            font-size: 1.2rem;
+            color: #6b21a8;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
+
+    <!-- OVERLAY DE CARGA / BARRA DE PROGRESO -->
+    <div id="upload-overlay" class="oculto">
+        <div class="upload-card">
+            <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="max-width: 80px; height: auto; margin-bottom: 10px;">
+            <h3>Subiendo Información</h3>
+            <p id="upload-status-text">Preparando archivos...</p>
+            <div class="progress-bar-container">
+                <div id="progress-bar-fill" class="progress-bar-fill"></div>
+            </div>
+            <p id="upload-percentage">0%</p>
+            <p style="font-size: 0.75rem; color: #666; margin-top: 10px;">⚠️ No cierres la aplicación ni bloquees tu teléfono mientras se completa la carga.</p>
+        </div>
+    </div>
 
     <!-- 1. PANTALLA DE LOGIN / BIENVENIDA -->
     <div id="login-screen">
@@ -262,6 +325,24 @@
         window.archivosAnaquel = [];
         window.archivosAcciones = [];
 
+        // Funciones de control de la barra de progreso visual
+        function mostrarProgreso(texto, porcentaje) {
+            const overlay = document.getElementById('upload-overlay');
+            const statusText = document.getElementById('upload-status-text');
+            const fill = document.getElementById('progress-bar-fill');
+            const pctText = document.getElementById('upload-percentage');
+
+            overlay.classList.remove('oculto');
+            statusText.textContent = texto;
+            fill.style.width = `${porcentaje}%`;
+            pctText.textContent = `${porcentaje}%`;
+        }
+
+        function ocultarProgreso() {
+            const overlay = document.getElementById('upload-overlay');
+            overlay.classList.add('oculto');
+        }
+
         function comprimirImagenWebP(file, maxWidth = 1280, quality = 0.80) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -314,7 +395,6 @@
             const loginError = document.getElementById("login-error");
             const welcomeMsg = document.getElementById("welcome-msg");
 
-            // Validar si ya existe una sesión activa almacenada
             const sesionActiva = sessionStorage.getItem("bo_sesion_activa");
             const usuarioGuardado = sessionStorage.getItem("bo_usuario");
 
@@ -339,7 +419,6 @@
                 btnLogin.disabled = true;
 
                 try {
-                    // Consulta directa contra la tabla usuarios_bo en Supabase
                     const { data, error } = await supabaseClient
                         .from('usuarios_bo')
                         .select('*')
@@ -349,10 +428,8 @@
                     if (error) throw error;
 
                     if (data && data.length > 0) {
-                        // Guardar la sesión en sessionStorage para compartirla con misauditorias.html
                         sessionStorage.setItem("bo_sesion_activa", "true");
                         sessionStorage.setItem("bo_usuario", user);
-                        // Compatibilidad con almacenamiento previo si se requiere
                         localStorage.setItem("sey_user", user);
 
                         showApp(user);
@@ -708,10 +785,17 @@
             }
         }
 
-        async function subirImágenesABucket(archivosArray, nombreBucket) {
+        // Función mejorada con cálculo de porcentaje dinámico para la barra de progreso
+        async function subirImágenesABucketConProgreso(archivosArray, nombreBucket, porcentajeInicio, porcentajeFin) {
             let urlsSubidas = [];
+            const total = archivosArray.length;
+            const rangoSpan = porcentajeFin - porcentajeInicio;
 
-            for (let archivo of archivosArray) {
+            for (let i = 0; i < total; i++) {
+                let archivo = archivosArray[i];
+                let porcentajeActual = Math.round(porcentajeInicio + (i / total) * rangoSpan);
+                mostrarProgreso(`Subiendo imagen ${i + 1} de ${total} (${nombreBucket})...`, porcentajeActual);
+
                 const nombreArchivoUnico = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${archivo.name.replace(/\s+/g, '_')}`;
 
                 const { data: uploadData, error: uploadError } = await supabaseClient.storage
@@ -755,10 +839,16 @@
             }
 
             try {
-                alert("Subiendo evidencias WebP a la nube, por favor espera un momento...");
+                // Iniciar barra de progreso visual (0%)
+                mostrarProgreso("Iniciando subida de evidencias...", 5);
 
-                const urlsAnaquel = await subirImágenesABucket(window.archivosAnaquel, 'anaquel-evidencias');
-                const urlsAcciones = await subirImágenesABucket(window.archivosAcciones, 'acciones-mejoras');
+                // Subir fotos de anaquel (Rango 5% al 45%)
+                const urlsAnaquel = await subirImágenesABucketConProgreso(window.archivosAnaquel, 'anaquel-evidencias', 5, 45);
+
+                // Subir fotos de acciones (Rango 45% al 85%)
+                const urlsAcciones = await subirImágenesABucketConProgreso(window.archivosAcciones, 'acciones-mejoras', 45, 85);
+
+                mostrarProgreso("Guardando registros en la base de datos...", 90);
 
                 let inventarioData = [];
                 inputsStock.forEach(input => {
@@ -783,10 +873,16 @@
 
                 if (insertError) throw insertError;
 
-                alert("¡Visita, inventario y evidencias WebP registradas y subidas correctamente!");
-                location.reload();
+                mostrarProgreso("¡Completado con éxito!", 100);
+
+                setTimeout(() => {
+                    ocultarProgreso();
+                    alert("¡Visita, inventario y evidencias WebP registradas y subidas correctamente!");
+                    location.reload();
+                }, 500);
 
             } catch (err) {
+                ocultarProgreso();
                 alert("Hubo un error al procesar o subir las imágenes: " + err.message);
                 console.error(err);
             }
