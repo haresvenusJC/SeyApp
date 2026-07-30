@@ -34,6 +34,40 @@
             margin-bottom: 40px;
         }
 
+        /* Estilos de la Pantalla de Login */
+        #login-container {
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            text-align: center;
+        }
+        #login-container h2 { color: #6b21a8; margin-bottom: 20px; }
+        .login-input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 15px;
+        }
+        .login-btn {
+            width: 100%;
+            background: #6b21a8;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .login-btn:hover { background: #551a8b; }
+        .error-login { color: #e6007e; font-size: 0.9rem; margin-top: 10px; display: none; }
+
         h2 { color: #6b21a8; margin-top: 0; }
         h3 { color: #333333; border-bottom: 2px solid #eee; padding-bottom: 5px; }
         
@@ -123,20 +157,6 @@
         }
 
         .oculto { display: none !important; }
-        
-        #login-bo {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            max-width: 380px;
-            background: white;
-            padding: 35px 30px;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-            text-align: center;
-        }
 
         #sidebar-menu {
             position: fixed;
@@ -344,6 +364,18 @@
 </head>
 <body>
 
+    <!-- 1. PANTALLA DE ACCESO (LOGIN) -->
+    <div id="login-container">
+        <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="width: 80px; height: auto; margin-bottom: 15px;">
+        <h2>Acceso Back Office</h2>
+        <form id="form-login" onsubmit="manejarLogin(event)">
+            <input type="text" id="login-usuario" class="login-input" placeholder="Usuario" required autocomplete="username">
+            <input type="password" id="login-password" class="login-input" placeholder="Contraseña" required autocomplete="current-password">
+            <button type="submit" class="login-btn">Entrar</button>
+            <p id="login-error" class="error-login">Usuario o contraseña incorrectos</p>
+        </form>
+    </div>
+
     <!-- MODAL VISOR DE EVIDENCIAS TIPO GALERÍA -->
     <div id="modal-visor" class="oculto">
         <button class="modal-cerrar" onclick="cerrarVisorModal()">×</button>
@@ -358,20 +390,7 @@
         <p id="modal-contador"></p>
     </div>
 
-    <!-- 1. PANTALLA DE ACCESO AL BACK OFFICE -->
-    <div id="login-bo">
-        <div style="width: 120px; height: auto; margin-bottom: 15px; display: flex; justify-content: center; align-items: center;">
-            <!-- Logo Sey desde Supabase -->
-            <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="width: 120px; height: auto; display: block;">
-        </div>
-        <h2>Back Office Analytics</h2>
-        <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Acceso restringido para supervisores</p>
-        <input type="password" id="bo-pass" placeholder="Contraseña de Administrador" style="width: 100%;">
-        <button id="btn-login-bo" style="width: 100%; margin-top: 10px;">Ingresar al Panel</button>
-        <p id="login-error" class="error" style="font-size: 0.85rem; margin-top: 10px; color: #e74c3c;"></p>
-    </div>
-
-    <!-- BOTÓN SANDWICH PARA MENÚ LATERAL -->
+    <!-- BOTÓN SANDWICH PARA MENÚ LATERAL (Oculto al inicio) -->
     <button class="hamburger-btn oculto" id="btn-sandwich" onclick="toggleSidebar()">☰ Reportes Dinámicos</button>
 
     <!-- MENÚ LATERAL DESLIZANTE -->
@@ -414,14 +433,14 @@
         <button onclick="exportarTablaAExcel()" style="background: #28a745; width: 100%; margin-top: 10px;">Exportar a Excel 📊</button>
     </div>
 
-    <!-- 2. CONTENEDOR PRINCIPAL DEL BACK OFFICE -->
+    <!-- 2. CONTENEDOR PRINCIPAL DEL BACK OFFICE (Oculto al inicio) -->
     <div id="bo-content" class="container oculto">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px;">
             <div style="display: flex; align-items: center; gap: 20px;">
                 <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="width: 90px; height: auto; display: block;">
                 <h2 style="margin: 0;">Panel de Control y Analítica de Auditorías</h2>
             </div>
-            <button onclick="cerrarSesionBO()" style="background: #e74c3c; width: auto; padding: 8px 15px;">Cerrar Sesión</button>
+            <button onclick="cerrarSesion()" style="background: #e6007e; padding: 8px 12px; font-size: 0.9rem;">Cerrar Sesión</button>
         </div>
 
         <!-- Barra de Filtros Globales -->
@@ -518,8 +537,6 @@
             console.error("Error al inicializar el cliente de Supabase:", e);
         }
 
-        const PASS_ADMIN = "Sey123";
-
         let chartDiaInstance = null;
         let chartMesInstance = null;
         let cacheGlobalVisitas = [];
@@ -530,48 +547,49 @@
         let galeriaIndiceActual = 0;
         let galeriaTituloBase = '';
 
-        document.addEventListener("DOMContentLoaded", () => {
-            const loginBo = document.getElementById("login-bo");
-            const boContent = document.getElementById("bo-content");
-            const btnLoginBo = document.getElementById("btn-login-bo");
-            const boPass = document.getElementById("bo-pass");
-            const loginError = document.getElementById("login-error");
-            const btnSandwich = document.getElementById("btn-sandwich");
+        // Función para manejar el inicio de sesión consultando Supabase
+        async function manejarLogin(event) {
+            event.preventDefault();
+            const usuarioInput = document.getElementById('login-usuario').value.trim();
+            const passwordInput = document.getElementById('login-password').value.trim();
+            const errorMsg = document.getElementById('login-error');
 
-            if (sessionStorage.getItem("bo_auth") === "true") {
-                if (loginBo) loginBo.style.display = "none";
-                if (boContent) boContent.classList.remove("oculto");
-                if (btnSandwich) btnSandwich.classList.remove("oculto");
-                
-                setTimeout(() => {
+            errorMsg.style.display = 'none';
+
+            try {
+                // Consulta la tabla 'usuarios_bo' creada en Supabase
+                const { data, error } = await supabaseClient
+                    .from('usuarios_bo')
+                    .select('*')
+                    .eq('usuario', usuarioInput)
+                    .eq('password', passwordInput)
+                    .maybeSingle();
+
+                if (error) throw error;
+
+                if (data) {
+                    // Login exitoso: Ocultar login y mostrar panel principal
+                    document.getElementById('login-container').classList.add('oculto');
+                    document.getElementById('bo-content').classList.remove('oculto');
+                    document.getElementById('btn-sandwich').classList.remove('oculto');
+                    
                     inicializarBackOffice();
-                }, 50);
+                } else {
+                    errorMsg.style.display = 'block';
+                }
+            } catch (err) {
+                console.error("Error en autenticación:", err);
+                errorMsg.textContent = "Error de conexión con la base de datos.";
+                errorMsg.style.display = 'block';
             }
+        }
 
-            if (btnLoginBo) {
-                btnLoginBo.addEventListener("click", () => {
-                    if (boPass && boPass.value === PASS_ADMIN) {
-                        sessionStorage.setItem("bo_auth", "true");
-                        if (loginBo) loginBo.style.display = "none";
-                        if (boContent) boContent.classList.remove("oculto");
-                        if (btnSandwich) btnSandwich.classList.remove("oculto");
-                        inicializarBackOffice();
-                    } else {
-                        if (loginError) loginError.textContent = "Contraseña incorrecta.";
-                    }
-                });
-            }
-
-            if (boPass) {
-                boPass.addEventListener("keypress", (e) => {
-                    if (e.key === 'Enter' && btnLoginBo) btnLoginBo.click();
-                });
-            }
-        });
-
-        function cerrarSesionBO() {
-            sessionStorage.removeItem("bo_auth");
-            location.reload();
+        function cerrarSesion() {
+            document.getElementById('bo-content').classList.add('oculto');
+            document.getElementById('btn-sandwich').classList.add('oculto');
+            document.getElementById('sidebar-menu').classList.remove('open');
+            document.getElementById('login-container').classList.remove('oculto');
+            document.getElementById('form-login').reset();
         }
 
         function toggleSidebar() {

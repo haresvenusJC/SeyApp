@@ -54,7 +54,7 @@
         }
         button:hover { background: #551a8b; }
 
-        select, input[type="text"], input[type="number"], input[type="file"], textarea { width: 100%; padding: 10px; margin-top: 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
+        select, input[type="text"], input[type="password"], input[type="number"], input[type="file"], textarea { width: 100%; padding: 10px; margin-top: 10px; border-radius: 4px; border: 1px solid #ccc; font-size: 16px; box-sizing: border-box; }
         textarea { resize: vertical; height: 100px; }
         .success { color: green; font-weight: bold; }
         .error { color: red; font-weight: bold; }
@@ -125,13 +125,15 @@
     <!-- 1. PANTALLA DE LOGIN / BIENVENIDA -->
     <div id="login-screen">
         <div class="login-card">
-            <!-- Logo utilizando la URL pública de Supabase -->
+            <!-- Logo utilizando la URL pública de Supabase[cite: 1] -->
             <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="max-width: 120px; height: auto; margin-bottom: 15px;">
             <h2 style="margin-bottom: 5px; color: #333;">¡Bienvenido!</h2>
-            <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Ingresa tu nombre para continuar</p>
+            <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Ingresa tus credenciales</p>
             
-            <input type="text" id="user-name" placeholder="Tu Nombre o Usuario">
+            <input type="text" id="user-name" placeholder="Usuario">
+            <input type="password" id="user-password" placeholder="Contraseña">
             <button id="btn-login" style="margin-top: 15px;">Entrar a la App</button>
+            <p id="login-error" class="error" style="font-size: 0.85rem; margin-top: 10px;"></p>
         </div>
     </div>
 
@@ -308,28 +310,73 @@
             const btnLogin = document.getElementById("btn-login");
             const btnLogout = document.getElementById("btn-logout");
             const inputUserName = document.getElementById("user-name");
+            const inputUserPassword = document.getElementById("user-password");
+            const loginError = document.getElementById("login-error");
             const welcomeMsg = document.getElementById("welcome-msg");
 
-            const savedUser = localStorage.getItem("sey_user");
-            if (savedUser) {
-                showApp(savedUser);
+            // Validar si ya existe una sesión activa almacenada
+            const sesionActiva = sessionStorage.getItem("bo_sesion_activa");
+            const usuarioGuardado = sessionStorage.getItem("bo_usuario");
+
+            if (sesionActiva && usuarioGuardado) {
+                showApp(usuarioGuardado);
+            } else {
+                loginScreen.style.display = "flex";
+                appContent.classList.add("oculto");
             }
 
-            btnLogin.addEventListener("click", () => {
-                const name = inputUserName.value.trim();
-                if (name === "") {
-                    alert("Por favor ingresa tu nombre");
+            btnLogin.addEventListener("click", async () => {
+                const user = inputUserName.value.trim();
+                const pass = inputUserPassword.value.trim();
+                loginError.textContent = "";
+
+                if (user === "" || pass === "") {
+                    loginError.textContent = "Por favor ingresa usuario y contraseña";
                     return;
                 }
-                localStorage.setItem("sey_user", name);
-                showApp(name);
+
+                btnLogin.textContent = "Verificando...";
+                btnLogin.disabled = true;
+
+                try {
+                    // Consulta directa contra la tabla usuarios_bo en Supabase
+                    const { data, error } = await supabaseClient
+                        .from('usuarios_bo')
+                        .select('*')
+                        .eq('usuario', user)
+                        .eq('password', pass);
+
+                    if (error) throw error;
+
+                    if (data && data.length > 0) {
+                        // Guardar la sesión en sessionStorage para compartirla con misauditorias.html
+                        sessionStorage.setItem("bo_sesion_activa", "true");
+                        sessionStorage.setItem("bo_usuario", user);
+                        // Compatibilidad con almacenamiento previo si se requiere
+                        localStorage.setItem("sey_user", user);
+
+                        showApp(user);
+                    } else {
+                        loginError.textContent = "Usuario y contraseña incorrectos";
+                    }
+                } catch (err) {
+                    loginError.textContent = "Error al conectar con el servidor: " + err.message;
+                } finally {
+                    btnLogin.textContent = "Entrar a la App";
+                    btnLogin.disabled = false;
+                }
             });
 
             btnLogout.addEventListener("click", () => {
+                sessionStorage.removeItem("bo_sesion_activa");
+                sessionStorage.removeItem("bo_usuario");
                 localStorage.removeItem("sey_user");
+                
                 appContent.classList.add("oculto");
                 loginScreen.style.display = "flex";
                 inputUserName.value = "";
+                inputUserPassword.value = "";
+                loginError.textContent = "";
             });
 
             function showApp(username) {
@@ -690,7 +737,7 @@
         async function guardarVisitaEInventario() {
             const comentarios = document.getElementById('input-comentarios').value.trim();
             const inputsStock = document.querySelectorAll('.input-stock');
-            const usuarioActual = localStorage.getItem("sey_user") || "Anónimo";
+            const usuarioActual = sessionStorage.getItem("bo_usuario") || localStorage.getItem("sey_user") || "Anónimo";
 
             if (window.archivosAnaquel.length < 1 || window.archivosAnaquel.length > 5) {
                 alert('Debes adjuntar de 1 a 5 fotografías en "Evidencias de Anaquel".');
