@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Control de Auditoría - Farmacias</title>
+    
+    <!-- Configuración para PWA (Instalable y Pantalla Completa) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6b21a8">
+
     <!-- SDK de Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
@@ -129,7 +134,6 @@
             width: 100%;
             height: 100%;
             background: rgba(0, 0, 0, 0.75);
-            /* Quitamos display flex genérico para que respete el oculto nativo */
             justify-content: center;
             align-items: center;
             z-index: 9999;
@@ -174,7 +178,7 @@
 </head>
 <body>
 
-    <!-- OVERLAY DE CARGA / BARRA DE PROGRESO (Forzado a ocultarse al cargar la página) -->
+    <!-- OVERLAY DE CARGA / BARRA DE PROGRESO -->
     <div id="upload-overlay" class="oculto" style="display: none;">
         <div class="upload-card">
             <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="max-width: 80px; height: auto; margin-bottom: 10px;">
@@ -203,7 +207,7 @@
         </div>
     </div>
 
-    <!-- 2. CONTENEDOR PRINCIPAL DE LA APP (PASO A PASO) -->
+    <!-- 2. CONTENEDOR PRINCIPAL DE LA APP -->
     <div id="app-content" class="container oculto">
         
         <!-- Barra superior con bienvenida, botón de auditorías y botón de salir -->
@@ -242,7 +246,6 @@
 
             <div id="contenedor-resultado-proximidad" style="margin-top: 15px;"></div>
 
-            <!-- Formulario oculto en caso de que no exista y deba registrarse (con foto) -->
             <div id="form-nueva-sucursal" class="oculto" style="margin-top: 15px; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
                 <p class="info">📍 ¿No aparece en la lista de arriba? Da de alta esta nueva sucursal:</p>
                 
@@ -258,7 +261,6 @@
             
             <p id="sucursal-status"></p>
 
-            <!-- Botón CONTINUAR (Aparece cuando la sucursal está lista/seleccionada) -->
             <div id="contenedor-btn-continuar" class="oculto" style="margin-top: 25px;">
                 <button onclick="irAInventario()" style="background: #28a745; font-size: 18px; padding: 12px;">CONTINUAR ➔</button>
             </div>
@@ -274,7 +276,6 @@
 
             <hr>
 
-            <!-- SECCIÓN 1: Evidencias de Anaquel -->
             <div class="seccion-card">
                 <h3>Evidencias de Anaquel</h3>
                 <p style="font-size: 0.85rem; color: #666;">Sube de 1 a 5 fotografías de cómo se encontró el anaquel inicialmente.</p>
@@ -283,7 +284,6 @@
                 <p id="error-anaquel" class="error" style="font-size: 0.8rem; margin-top: 5px;"></p>
             </div>
 
-            <!-- SECCIÓN 2: Productos e Inventarios -->
             <div class="seccion-card">
                 <h3>Productos y Existencias</h3>
                 <div id="lista-productos-container">
@@ -291,13 +291,11 @@
                 </div>
             </div>
 
-            <!-- SECCIÓN 3: Comentarios -->
             <div class="seccion-card">
                 <h3>Acciones Realizadas y Comentarios</h3>
                 <textarea id="input-comentarios" placeholder="Describe las acciones realizadas, acuerdos con encargado, faltantes, etc."></textarea>
             </div>
 
-            <!-- SECCIÓN 4: Acciones Implementadas -->
             <div class="seccion-card">
                 <h3>Acciones Implementadas</h3>
                 <p style="font-size: 0.85rem; color: #666;">Sube de 1 a 5 fotografías que informen las mejoras hechas.</p>
@@ -313,6 +311,15 @@
     </div>
 
     <script>
+        // Registro automático del Service Worker para PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('Service Worker registrado con éxito'))
+                    .catch(err => console.log('Error al registrar Service Worker', err));
+            });
+        }
+
         const SUPABASE_URL = 'https://snjvdfjouoxnaopgeral.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuanZkZmpvdW94bmFvcGdlcmFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTI2MzEsImV4cCI6MjEwMDc2ODYzMX0.CIrxhWZtySmv42iZfFGHgyavP6uxA44kbbBQlQNc8uc';
         
@@ -328,7 +335,6 @@
         window.archivosAnaquel = [];
         window.archivosAcciones = [];
 
-        // Funciones de control de la barra de progreso visual (se despliega solo al enviar)
         function mostrarProgreso(texto, porcentaje) {
             const overlay = document.getElementById('upload-overlay');
             const statusText = document.getElementById('upload-status-text');
@@ -336,7 +342,7 @@
             const pctText = document.getElementById('upload-percentage');
 
             overlay.classList.remove('oculto');
-            overlay.style.display = 'flex'; // Forzamos display flex al activarlo
+            overlay.style.display = 'flex';
             statusText.textContent = texto;
             fill.style.width = `${porcentaje}%`;
             pctText.textContent = `${porcentaje}%`;
@@ -843,16 +849,11 @@
             }
 
             try {
-                // 1. Mostrar la barra de progreso inmediatamente en 5% antes de iniciar
                 mostrarProgreso("Preparando archivos y conectando con el servidor...", 5);
 
-                // 2. Subir fotos de anaquel (Rango del 10% al 45%)
                 const urlsAnaquel = await subirImágenesABucketConProgreso(window.archivosAnaquel, 'anaquel-evidencias', 10, 45);
-
-                // 3. Subir fotos de acciones (Rango del 45% al 80%)
                 const urlsAcciones = await subirImágenesABucketConProgreso(window.archivosAcciones, 'acciones-mejoras', 45, 80);
 
-                // 4. Guardar inventario y texto en la base de datos (90%)
                 mostrarProgreso("Guardando inventario y reporte en la base de datos...", 90);
 
                 let inventarioData = [];
@@ -878,7 +879,6 @@
 
                 if (insertError) throw insertError;
 
-                // 5. Finalizado con éxito (100%)
                 mostrarProgreso("¡Visita guardada con éxito!", 100);
 
                 setTimeout(() => {
