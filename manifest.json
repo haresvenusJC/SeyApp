@@ -1,0 +1,20 @@
+{
+  "name": "Control de Auditoría - Farmacias",
+  "short_name": "Sey Auditoría",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#6b21a8",
+  "theme_color": "#6b21a8",
+  "icons": [
+    {
+      "src": "https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
