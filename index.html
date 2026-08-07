@@ -195,7 +195,6 @@
     <!-- 1. PANTALLA DE LOGIN / BIENVENIDA -->
     <div id="login-screen">
         <div class="login-card">
-            <!-- Logo utilizando la URL pública de Supabase[cite: 1] -->
             <img src="https://snjvdfjouoxnaopgeral.supabase.co/storage/v1/object/public/sucursales-fotos/Seylogo.png" alt="Logo Sey" style="max-width: 120px; height: auto; margin-bottom: 15px;">
             <h2 style="margin-bottom: 5px; color: #333;">¡Bienvenido!</h2>
             <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Ingresa tus credenciales</p>
@@ -247,7 +246,7 @@
             <div id="contenedor-resultado-proximidad" style="margin-top: 15px;"></div>
 
             <div id="form-nueva-sucursal" class="oculto" style="margin-top: 15px; background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #ddd;">
-                <p class="info">📍 ¿No aparece en la lista de arriba? Da de alta esta nueva sucursal:</p>
+                <p class="info">📍 ¿Estás en una sucursal nueva o no aparece en la lista? Dala de alta aquí:</p>
                 
                 <label>Nombre Específico de la Sucursal:</label>
                 <input type="text" id="input-nombre-nueva" placeholder="Ej. HEB Las Torres">
@@ -579,14 +578,22 @@
                     });
                 }
 
-                if (sucursalCercana && menorDistancia <= 600) {
-                    window.sucursalSeleccionadaId = sucursalCercana.id;
-                    window.nombreSucursalSeleccionada = sucursalCercana.nombre_sucursal;
-                    resultadoDiv.innerHTML = `<span class="success">✅ Sucursal detectada cercana (${sucursalCercana.distanciaMetros}m):</span><br>` +
-                                             `<b>${sucursalCercana.nombre_sucursal}</b>`;
-                    btnContinuar.classList.remove('oculto');
+                if (sucursalCercana) {
+                    if (menorDistancia <= 300) {
+                        window.sucursalSeleccionadaId = sucursalCercana.id;
+                        window.nombreSucursalSeleccionada = sucursalCercana.nombre_sucursal;
+                        resultadoDiv.innerHTML = `<span class="success">✅ Sucursal detectada cercana (${sucursalCercana.distanciaMetros}m):</span><br>` +
+                                                 `<b>${sucursalCercana.nombre_sucursal}</b>`;
+                        btnContinuar.classList.remove('oculto');
+                    } else {
+                        // AQUÍ ESTÁ EL CAMBIO PRINCIPAL: SE MUESTRA EL ERROR Y SE HABILITA EL FORMULARIO
+                        resultadoDiv.innerHTML = `<span class="error">❌ Geocerca activada: Estás a ${sucursalCercana.distanciaMetros}m de la sucursal más cercana (${sucursalCercana.nombre_sucursal}).</span><br>` +
+                                                 `<span class="info" style="margin-top:5px; display:inline-block;">Si te encuentras en una nueva ubicación, regístrala a continuación.</span>`;
+                        btnContinuar.classList.add('oculto');
+                        formNueva.classList.remove('oculto');
+                    }
                 } else if (sucursalesDeCadena.length > 0) {
-                    let htmlListado = `<span class="info">📍 Selecciona la sucursal correspondiente de la lista:</span>`;
+                    let htmlListado = `<span class="info">📍 Selecciona la sucursal correspondiente de la lista (No cuentan con coordenadas GPS precisas guardadas) o da de alta una nueva:</span>`;
                     htmlListado += `<div style="margin-top: 10px; max-height: 180px; overflow-y: auto;">`;
                     sucursalesDeCadena.forEach(s => {
                         htmlListado += `
