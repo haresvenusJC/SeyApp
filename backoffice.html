@@ -198,6 +198,29 @@
             border-radius: 8px;
             margin-bottom: 15px;
         }
+        .submenu {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            margin-bottom: 14px;
+            overflow: hidden;
+        }
+        .submenu-header {
+            width: 100%;
+            background: #f3e8ff;
+            color: #6b21a8;
+            border: none;
+            padding: 12px 14px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .submenu-header:hover { background: #e9d5ff; }
+        .submenu-body { padding: 14px; }
+        .submenu-caret { transition: transform 0.2s ease; font-size: 0.8rem; }
+        .submenu-caret.cerrado { transform: rotate(-90deg); }
         .checkbox-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -227,12 +250,31 @@
             color: white;
         }
         #resultado-dinamico-container {
-            display: block;
+            display: none;
             width: 100%;
-            margin-top: 30px;
-            border-top: 3px solid #6b21a8;
-            padding-top: 15px;
+            margin: 0 0 25px 0;
+            border: 2px solid #6b21a8;
+            border-radius: 10px;
+            padding: 15px;
+            background: #ffffff;
         }
+        #resultado-dinamico-container.visible { display: block; }
+        .reporte-barra-superior {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+        .reporte-barra-superior h3 { border: none; margin: 0; padding: 0; }
+        .btn-cerrar-reporte { background: #6c757d; padding: 6px 12px; font-size: 0.85rem; }
+
+        .dynamic-pivot-table tr.fila-subtotal-pivot td { background: #f3e8ff; font-weight: bold; }
+        .dynamic-pivot-table tr.fila-total-pivot td { background: #6b21a8; color: #fff; font-weight: bold; }
+        #config-dinamica select { width: 100%; }
         
         .btn-link-evidencia {
             display: inline-block;
@@ -392,17 +434,24 @@
     </div>
 
     <!-- BOTÓN SANDWICH PARA MENÚ LATERAL (Oculto al inicio) -->
-    <button class="hamburger-btn oculto" id="btn-sandwich" onclick="toggleSidebar()">☰ Reportes Dinámicos</button>
+    <button class="hamburger-btn oculto" id="btn-sandwich" onclick="toggleSidebar()">☰ Reportes y Mapa</button>
 
     <!-- MENÚ LATERAL DESLIZANTE -->
     <div id="sidebar-menu">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3 style="margin: 0; color: #6b21a8; border: none; padding: 0;">Generador Dinámico</h3>
+            <h3 style="margin: 0; color: #6b21a8; border: none; padding: 0;">Panel de Reportes</h3>
             <button onclick="toggleSidebar()" style="background: none; border: none; font-size: 20px; cursor: pointer; color: #666; width: auto; padding: 0;">✕</button>
         </div>
 
+        <div class="submenu">
+            <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-tabla')">
+                <span>📊 Tabla dinámica</span>
+                <span class="submenu-caret cerrado" id="caret-sm-tabla">▾</span>
+            </button>
+            <div class="submenu-body oculto" id="sm-tabla">
+
         <div class="pivot-config-box">
-            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">1. Filtrar por Rango de Fechas:</label>
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Filtros (solo para la tabla dinámica):</label>
             <input type="date" id="sidebar-fecha-inicio" style="width: 100%; margin-bottom: 8px;">
             <input type="date" id="sidebar-fecha-fin" style="width: 100%; margin-bottom: 10px;">
 
@@ -418,7 +467,59 @@
         </div>
 
         <div class="pivot-config-box">
-            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block;">2. Selector de Columnas:</label>
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Tipo de tabla:</label>
+            <select id="sidebar-modo" style="width: 100%;" onchange="cambiarModoReporte()">
+                <option value="detalle">Tabla de detalle (lista de registros)</option>
+                <option value="dinamica">Tabla dinámica (resumen con totales)</option>
+            </select>
+        </div>
+
+        <div class="pivot-config-box oculto" id="config-dinamica">
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Agrupar filas por:</label>
+            <select id="pivot-fila-1" style="margin-bottom: 8px;">
+                <option value="cadena">Cadena</option>
+                <option value="sucursal">Sucursal</option>
+                <option value="usuario">Auditor</option>
+                <option value="dia">Día (fecha)</option>
+                <option value="semana">Semana (ISO)</option>
+                <option value="mes">Mes</option>
+                <option value="diasemana">Día de la semana</option>
+            </select>
+
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Luego por (2º nivel, opcional):</label>
+            <select id="pivot-fila-2" style="margin-bottom: 8px;">
+                <option value="">— Ninguno —</option>
+                <option value="cadena">Cadena</option>
+                <option value="sucursal">Sucursal</option>
+                <option value="usuario">Auditor</option>
+                <option value="dia">Día (fecha)</option>
+                <option value="mes">Mes</option>
+                <option value="diasemana">Día de la semana</option>
+            </select>
+
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Columnas (pivote, opcional):</label>
+            <select id="pivot-columna" style="margin-bottom: 8px;">
+                <option value="">— Sin columnas —</option>
+                <option value="cadena">Cadena</option>
+                <option value="usuario">Auditor</option>
+                <option value="diasemana">Día de la semana</option>
+                <option value="mes">Mes</option>
+            </select>
+
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Valor a calcular:</label>
+            <select id="pivot-valor">
+                <option value="conteo">Número de visitas</option>
+                <option value="piezas_sum">Piezas en inventario (suma)</option>
+                <option value="piezas_prom">Piezas en inventario (promedio)</option>
+                <option value="fotos_anaquel">Fotos de anaquel (suma)</option>
+                <option value="fotos_acciones">Fotos de acciones (suma)</option>
+                <option value="sucursales_unicas">Sucursales únicas</option>
+                <option value="auditores_unicos">Auditores únicos</option>
+            </select>
+        </div>
+
+        <div class="pivot-config-box" id="config-detalle">
+            <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block;">Columnas a mostrar:</label>
             <div class="checkbox-grid">
                 <label><input type="checkbox" class="col-selector" value="fecha" checked> Fecha/Hora</label>
                 <label><input type="checkbox" class="col-selector" value="usuario" checked> Auditor</label>
@@ -430,8 +531,22 @@
             </div>
         </div>
 
-        <button onclick="generarReporteDinamicoSidebar()" style="background: #6b21a8; width: 100%; margin-top: 5px;">Generar Reporte Dinámico</button>
-        <button onclick="exportarTablaAExcel()" style="background: #28a745; width: 100%; margin-top: 10px;">Exportar a Excel 📊</button>
+        <button onclick="generarReporteDinamicoSidebar()" style="background: #6b21a8; width: 100%; margin-top: 5px;">Generar reporte en tabla</button>
+        <button onclick="exportarTablaAExcel()" style="background: #28a745; width: 100%; margin-top: 10px;">Exportar tabla a Excel 📊</button>
+
+            </div>
+        </div>
+
+        <div class="submenu">
+            <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-mapa')">
+                <span>🗺️ Mapa de visitas</span>
+                <span class="submenu-caret cerrado" id="caret-sm-mapa">▾</span>
+            </button>
+            <div class="submenu-body oculto" id="sm-mapa">
+                <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Ubicaciones de las visitas por día sobre el mapa. Tiene su propio filtro de fechas dentro de la página.</p>
+                <button onclick="abrirReporteMapa()" style="background: #2563eb; width: 100%;">🗺️ Abrir mapa de ubicaciones</button>
+            </div>
+        </div>
     </div>
 
     <!-- 2. CONTENEDOR PRINCIPAL DEL BACK OFFICE (Oculto al inicio) -->
@@ -446,6 +561,9 @@
             </div>
             <button onclick="cerrarSesion()" style="background: #e6007e; padding: 8px 12px; font-size: 0.9rem;">Cerrar Sesión</button>
         </div>
+
+        <!-- Resultado de reportes (menú lateral): se muestra aquí, al inicio de la página -->
+        <div id="resultado-dinamico-container"></div>
 
         <!-- Barra de Filtros Globales -->
         <div class="filters-bar">
@@ -493,7 +611,8 @@
         <!-- Sección Gráficas Analíticas -->
         <div class="charts-grid">
             <div class="chart-card">
-                <h3>Auditorías por Día de la Semana</h3>
+                <h3>Auditorías por Día</h3>
+                <p id="subtitulo-dia-semana" style="margin: -6px 0 8px; font-size: 0.78rem; color: #666;"></p>
                 <canvas id="chartDiaSemana"></canvas>
             </div>
             <div class="chart-card">
@@ -524,9 +643,6 @@
                 </table>
             </div>
         </div>
-
-        <!-- Contenedor donde se renderizará el reporte dinámico generado -->
-        <div id="resultado-dinamico-container"></div>
 
     </div>
 
@@ -720,10 +836,10 @@
 
         async function inicializarBackOffice() {
             const hoy = new Date();
-            const hace30Dias = new Date();
-            hace30Dias.setDate(hoy.getDate() - 30);
+            const hace7Dias = new Date();
+            hace7Dias.setDate(hoy.getDate() - 6); // 7 días exactos (hoy incluido), sin repetir día de la semana
 
-            const fechaInicioStr = hace30Dias.toISOString().split('T')[0];
+            const fechaInicioStr = hace7Dias.toISOString().split('T')[0];
             const fechaFinStr = hoy.toISOString().split('T')[0];
 
             document.getElementById('filtro-fecha-fin').value = fechaFinStr;
@@ -835,36 +951,105 @@
             });
             document.getElementById('kpi-total-stock').textContent = stockTotalAcumulado.toLocaleString();
 
-            const diasSemanaNombres = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-            const conteoDias = { 'Lunes': 0, 'Martes': 0, 'Miércoles': 0, 'Jueves': 0, 'Viernes': 0, 'Sábado': 0, 'Domingo': 0 };
             const nombresMeses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
             let conteoMeses = {};
+            const conteoPorFecha = {};
 
             visitas.forEach(v => {
                 const fecha = new Date(v.created_at);
                 if (!isNaN(fecha)) {
-                    const nombreDia = diasSemanaNombres[fecha.getDay()];
-                    if (conteoDias[nombreDia] !== undefined) conteoDias[nombreDia]++;
+                    const claveDia = claveFechaLocal(fecha);
+                    conteoPorFecha[claveDia] = (conteoPorFecha[claveDia] || 0) + 1;
                     const mesAnioKey = `${nombresMeses[fecha.getMonth()]} ${fecha.getFullYear()}`;
                     conteoMeses[mesAnioKey] = (conteoMeses[mesAnioKey] || 0) + 1;
                 }
             });
 
-            renderizarGraficaDiaSemana(conteoDias);
+            const rangoIni = document.getElementById('filtro-fecha-inicio').value;
+            const rangoFin = document.getElementById('filtro-fecha-fin').value;
+            renderizarGraficaPorDia(conteoPorFecha, rangoIni, rangoFin);
             renderizarGraficaMeses(conteoMeses);
             renderizarTablaInventarios(visitas);
         }
 
-        function renderizarGraficaDiaSemana(conteoDias) {
+        // Clave local YYYY-MM-DD de un objeto Date (sin corrimiento por zona horaria).
+        function claveFechaLocal(dateObj) {
+            const y = dateObj.getFullYear();
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const dd = String(dateObj.getDate()).padStart(2, '0');
+            return `${y}-${m}-${dd}`;
+        }
+
+        // Arreglo con cada día de calendario del rango (Date locales).
+        function listarFechasEnRango(inicioStr, finStr) {
+            const out = [];
+            if (!inicioStr || !finStr) return out;
+            const p1 = inicioStr.split('-').map(Number);
+            const p2 = finStr.split('-').map(Number);
+            let d = new Date(p1[0], p1[1] - 1, p1[2]);
+            const fin = new Date(p2[0], p2[1] - 1, p2[2]);
+            let guarda = 0;
+            while (d <= fin && guarda < 3660) {
+                out.push(new Date(d));
+                d.setDate(d.getDate() + 1);
+                guarda++;
+            }
+            return out;
+        }
+
+        // Una barra por cada día del rango seleccionado (si eliges 21 días -> 21 barras).
+        function renderizarGraficaPorDia(conteoPorFecha, fInicio, fFin) {
             const ctx = document.getElementById('chartDiaSemana').getContext('2d');
-            const labels = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-            const dataValues = labels.map(d => conteoDias[d]);
+            const NOMBRES_DIA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+            let fechas = listarFechasEnRango(fInicio, fFin);
+            if (fechas.length === 0) {
+                // Sin rango: usar solo las fechas que tienen auditorías registradas.
+                fechas = Object.keys(conteoPorFecha).sort().map(k => {
+                    const p = k.split('-').map(Number);
+                    return new Date(p[0], p[1] - 1, p[2]);
+                });
+            }
+
+            const dataValues = fechas.map(f => conteoPorFecha[claveFechaLocal(f)] || 0);
+            const conAno = fechas.length > 0 && fechas[0].getFullYear() !== fechas[fechas.length - 1].getFullYear();
+            const labels = fechas.map(f => {
+                const dd = String(f.getDate()).padStart(2, '0');
+                const mm = String(f.getMonth() + 1).padStart(2, '0');
+                return `${NOMBRES_DIA[f.getDay()]} ${dd}/${mm}${conAno ? '/' + f.getFullYear() : ''}`;
+            });
+
+            const fmtF = s => { if (!s) return '—'; const p = s.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+            const sub = document.getElementById('subtitulo-dia-semana');
+            if (sub) {
+                sub.textContent = (fInicio && fFin)
+                    ? `Una barra por cada día del rango ${fmtF(fInicio)} – ${fmtF(fFin)} (${fechas.length} días). Los días sin auditorías aparecen en cero.`
+                    : `Una barra por cada día con auditorías registradas (${fechas.length} días).`;
+            }
 
             if (chartDiaInstance) chartDiaInstance.destroy();
             chartDiaInstance = new Chart(ctx, {
                 type: 'bar',
-                data: { labels: labels, datasets: [{ label: 'Número de Auditorías', data: dataValues, backgroundColor: '#6b21a8', borderRadius: 4 }] },
-                options: { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+                data: { labels: labels, datasets: [{ label: 'Auditorías', data: dataValues, backgroundColor: '#6b21a8', borderRadius: 4, maxBarThickness: 46 }] },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => {
+                                    const f = fechas[items[0].dataIndex];
+                                    return f ? f.toLocaleDateString('es-MX', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : '';
+                                },
+                                label: (item) => ` Auditorías: ${item.raw}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { autoSkip: false, minRotation: 90, maxRotation: 90, font: { size: 10 } } },
+                        y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } }
+                    }
+                }
             });
         }
 
@@ -948,6 +1133,30 @@
             });
         }
 
+        /* ===== Contenedor de resultados de reportes (se muestra al inicio de la página) ===== */
+        function barraResultadoReporte(titulo) {
+            return `<div class="reporte-barra-superior">
+                        <h3>${titulo}</h3>
+                        <button class="btn-cerrar-reporte" onclick="cerrarReporteDinamico()">✕ Cerrar y volver al dashboard</button>
+                    </div>`;
+        }
+
+        function mostrarResultadoReporte() {
+            document.getElementById('resultado-dinamico-container').classList.add('visible');
+        }
+
+        function cerrarReporteDinamico() {
+            const c = document.getElementById('resultado-dinamico-container');
+            c.classList.remove('visible');
+            c.innerHTML = '';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function abrirReporteMapa() {
+            // El mapa tiene su propio filtro de fechas; los filtros del menú son solo para la tabla dinámica.
+            window.location.href = 'reporte-mapa.html';
+        }
+
         async function generarReporteDinamicoSidebar() {
             try {
                 const fechaInicio = document.getElementById('sidebar-fecha-inicio').value;
@@ -971,13 +1180,18 @@
                 const { data, error } = await query;
                 if (error) throw error;
 
-                const columnasSeleccionadas = Array.from(document.querySelectorAll('.col-selector:checked')).map(cb => cb.value);
-                construirTablaDinamicaHTML(data || [], columnasSeleccionadas);
-                toggleSidebar(); 
+                const modoReporte = document.getElementById('sidebar-modo').value;
+                if (modoReporte === 'dinamica') {
+                    construirTablaDinamicaResumen(data || []);
+                } else {
+                    const columnasSeleccionadas = Array.from(document.querySelectorAll('.col-selector:checked')).map(cb => cb.value);
+                    construirTablaDinamicaHTML(data || [], columnasSeleccionadas);
+                }
+                toggleSidebar();
 
                 setTimeout(() => {
-                    document.getElementById('resultado-dinamico-container').scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }, 200);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }, 150);
 
             } catch (err) {
                 alert("Error al generar el reporte dinámico: " + err.message);
@@ -988,8 +1202,10 @@
         function construirTablaDinamicaHTML(registros, columnas) {
             let contenedorTabla = document.getElementById('resultado-dinamico-container');
             
+            mostrarResultadoReporte();
+
             if (!registros || registros.length === 0) {
-                contenedorTabla.innerHTML = '<h3>Reporte Dinámico Personalizado</h3><p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No se encontraron registros con los filtros seleccionados en el menú lateral.</p>';
+                contenedorTabla.innerHTML = barraResultadoReporte('Reporte de Detalle') + '<p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No se encontraron registros con los filtros seleccionados en el menú lateral.</p>';
                 return;
             }
 
@@ -999,7 +1215,7 @@
             const mapaProductos = {};
             cacheGlobalProductos.forEach(p => { mapaProductos[p.id] = p.nombre_producto || p.codigo_barras || 'Producto'; });
 
-            let html = '<h3>Reporte Dinámico Personalizado</h3>';
+            let html = barraResultadoReporte('Reporte de Detalle Personalizado');
             html += '<div class="dynamic-table-container"><table class="dynamic-pivot-table" id="tabla-exportable"><thead><tr>';
 
             if (columnas.includes('fecha')) html += '<th>Fecha y Hora</th>';
@@ -1060,6 +1276,236 @@
 
             html += '</tbody></table></div>';
             contenedorTabla.innerHTML = html;
+        }
+
+        /* ================== TABLA DINÁMICA (RESUMEN CON TOTALES) ================== */
+        const NOMBRES_MESES_PIVOT = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+        const NOMBRES_DIAS_PIVOT = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        const SEP_PIVOT = '␟';
+
+        function cambiarModoReporte() {
+            const modo = document.getElementById('sidebar-modo').value;
+            document.getElementById('config-dinamica').classList.toggle('oculto', modo !== 'dinamica');
+            document.getElementById('config-detalle').classList.toggle('oculto', modo === 'dinamica');
+        }
+
+        function toggleSubmenu(id) {
+            const body = document.getElementById(id);
+            const caret = document.getElementById('caret-' + id);
+            const oculto = body.classList.toggle('oculto');
+            if (caret) caret.classList.toggle('cerrado', oculto);
+        }
+
+        function getISOWeekPivot(d) {
+            const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            const dayNum = date.getUTCDay() || 7;
+            date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+            const semana = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+            return `${date.getUTCFullYear()}-S${String(semana).padStart(2, '0')}`;
+        }
+
+        function etiquetaDimensionPivot(dim) {
+            return ({ cadena: 'Cadena', sucursal: 'Sucursal', usuario: 'Auditor', dia: 'Día', semana: 'Semana', mes: 'Mes', diasemana: 'Día de la semana' })[dim] || dim;
+        }
+
+        function etiquetaMedidaPivot(m) {
+            return ({
+                conteo: 'Número de visitas',
+                piezas_sum: 'Piezas en inventario (suma)',
+                piezas_prom: 'Piezas en inventario (promedio)',
+                fotos_anaquel: 'Fotos de anaquel (suma)',
+                fotos_acciones: 'Fotos de acciones (suma)',
+                sucursales_unicas: 'Sucursales únicas',
+                auditores_unicos: 'Auditores únicos'
+            })[m] || m;
+        }
+
+        function contarFotosCampoPivot(campo) {
+            if (!campo) return 0;
+            if (Array.isArray(campo)) return campo.length;
+            if (typeof campo === 'string') {
+                const t = campo.trim();
+                if (t.startsWith('[')) {
+                    try { const a = JSON.parse(t); return Array.isArray(a) ? a.length : (t ? 1 : 0); } catch (e) { return 1; }
+                }
+                return t ? 1 : 0;
+            }
+            return 0;
+        }
+
+        function valorDimensionPivot(visita, dim, mapaSuc) {
+            const suc = mapaSuc[visita.sucursal_id] || {};
+            const fecha = new Date(visita.created_at);
+            const fechaOk = !isNaN(fecha);
+            switch (dim) {
+                case 'cadena': return suc.cadena || 'General';
+                case 'sucursal': return suc.nombre_sucursal || ('Sucursal ' + visita.sucursal_id);
+                case 'usuario': return visita.usuario || 'Anónimo';
+                case 'dia': return fechaOk ? `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}` : 'Sin fecha';
+                case 'semana': return fechaOk ? getISOWeekPivot(fecha) : 'Sin fecha';
+                case 'mes': return fechaOk ? `${NOMBRES_MESES_PIVOT[fecha.getMonth()]} ${fecha.getFullYear()}` : 'Sin fecha';
+                case 'diasemana': return fechaOk ? NOMBRES_DIAS_PIVOT[fecha.getDay()] : 'Sin fecha';
+                default: return '—';
+            }
+        }
+
+        function comparadorDimensionPivot(dim) {
+            if (dim === 'diasemana') {
+                const ord = { 'Lunes': 1, 'Martes': 2, 'Miércoles': 3, 'Jueves': 4, 'Viernes': 5, 'Sábado': 6, 'Domingo': 7 };
+                return (a, b) => (ord[a] || 50) - (ord[b] || 50);
+            }
+            if (dim === 'mes') {
+                const mi = {};
+                NOMBRES_MESES_PIVOT.forEach((m, i) => { mi[m] = i; });
+                const key = s => {
+                    const p = String(s).split(' ');
+                    return (parseInt(p[1]) || 0) * 100 + (mi[p[0]] !== undefined ? mi[p[0]] : 50);
+                };
+                return (a, b) => key(a) - key(b);
+            }
+            return (a, b) => String(a).localeCompare(String(b), 'es', { numeric: true });
+        }
+
+        function nuevoAccPivot() { return { count: 0, sum: 0, setSuc: new Set(), setAud: new Set() }; }
+
+        function alimentarAccPivot(acc, visita, medida) {
+            acc.count++;
+            if (medida === 'piezas_sum' || medida === 'piezas_prom') {
+                if (Array.isArray(visita.inventario)) {
+                    visita.inventario.forEach(i => { acc.sum += (parseInt(i.cantidad) || 0); });
+                }
+            } else if (medida === 'fotos_anaquel') {
+                acc.sum += contarFotosCampoPivot(visita.fotos_anaquel);
+            } else if (medida === 'fotos_acciones') {
+                acc.sum += contarFotosCampoPivot(visita.fotos_acciones);
+            }
+            acc.setSuc.add(visita.sucursal_id);
+            acc.setAud.add(visita.usuario || 'Anónimo');
+        }
+
+        function finalizarAccPivot(acc, medida) {
+            if (!acc) return 0;
+            switch (medida) {
+                case 'conteo': return acc.count;
+                case 'piezas_sum':
+                case 'fotos_anaquel':
+                case 'fotos_acciones': return acc.sum;
+                case 'piezas_prom': return acc.count ? Math.round((acc.sum / acc.count) * 10) / 10 : 0;
+                case 'sucursales_unicas': return acc.setSuc.size;
+                case 'auditores_unicos': return acc.setAud.size;
+                default: return acc.count;
+            }
+        }
+
+        function feedMapPivot(mapa, clave, visita, medida) {
+            let acc = mapa.get(clave);
+            if (!acc) { acc = nuevoAccPivot(); mapa.set(clave, acc); }
+            alimentarAccPivot(acc, visita, medida);
+        }
+
+        function fmtNumPivot(n) { return Number(n).toLocaleString('es-MX'); }
+
+        function construirTablaDinamicaResumen(registros) {
+            const cont = document.getElementById('resultado-dinamico-container');
+
+            const dimF1 = document.getElementById('pivot-fila-1').value;
+            const dimF2 = document.getElementById('pivot-fila-2').value;
+            const dimCol = document.getElementById('pivot-columna').value;
+            const medida = document.getElementById('pivot-valor').value;
+
+            mostrarResultadoReporte();
+
+            if (!registros || registros.length === 0) {
+                cont.innerHTML = barraResultadoReporte('Tabla Dinámica') + '<p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No se encontraron registros con los filtros seleccionados en el menú lateral.</p>';
+                return;
+            }
+
+            const mapaSuc = {};
+            cacheGlobalSucursales.forEach(s => { mapaSuc[s.id] = s; });
+
+            const cell = new Map();
+            const rowTot = new Map();
+            const colTot = new Map();
+            const f1Tot = new Map();
+            const f1Col = new Map();
+            const grand = nuevoAccPivot();
+
+            const f1Set = new Set();
+            const colSet = new Set();
+            const f1f2 = new Map();
+
+            registros.forEach(r => {
+                const f1 = valorDimensionPivot(r, dimF1, mapaSuc);
+                const f2 = dimF2 ? valorDimensionPivot(r, dimF2, mapaSuc) : '';
+                const c = dimCol ? valorDimensionPivot(r, dimCol, mapaSuc) : '__total__';
+
+                f1Set.add(f1);
+                colSet.add(c);
+                if (!f1f2.has(f1)) f1f2.set(f1, new Set());
+                f1f2.get(f1).add(f2);
+
+                feedMapPivot(cell, [f1, f2, c].join(SEP_PIVOT), r, medida);
+                feedMapPivot(rowTot, [f1, f2].join(SEP_PIVOT), r, medida);
+                feedMapPivot(colTot, c, r, medida);
+                feedMapPivot(f1Tot, f1, r, medida);
+                feedMapPivot(f1Col, [f1, c].join(SEP_PIVOT), r, medida);
+                alimentarAccPivot(grand, r, medida);
+            });
+
+            const colKeys = dimCol ? Array.from(colSet).sort(comparadorDimensionPivot(dimCol)) : ['__total__'];
+            const f1Keys = Array.from(f1Set).sort(comparadorDimensionPivot(dimF1));
+
+            let html = barraResultadoReporte('Tabla Dinámica — ' + etiquetaMedidaPivot(medida));
+            html += `<p style="font-size: 0.85rem; color: #666; margin-top: 0;">Filas: <b>${etiquetaDimensionPivot(dimF1)}</b>${dimF2 ? ' › <b>' + etiquetaDimensionPivot(dimF2) + '</b>' : ''}${dimCol ? ' &nbsp;|&nbsp; Columnas: <b>' + etiquetaDimensionPivot(dimCol) + '</b>' : ''} &nbsp;|&nbsp; ${registros.length} visita(s)</p>`;
+            html += '<div class="dynamic-table-container"><table class="dynamic-pivot-table" id="tabla-exportable"><thead><tr>';
+            html += `<th>${etiquetaDimensionPivot(dimF1)}</th>`;
+            if (dimF2) html += `<th>${etiquetaDimensionPivot(dimF2)}</th>`;
+            if (dimCol) colKeys.forEach(c => { html += `<th style="text-align:right;">${c}</th>`; });
+            html += '<th style="text-align:right;">Total</th></tr></thead><tbody>';
+
+            f1Keys.forEach(f1 => {
+                const f2Keys = dimF2 ? Array.from(f1f2.get(f1)).sort(comparadorDimensionPivot(dimF2)) : [''];
+
+                f2Keys.forEach(f2 => {
+                    html += '<tr>';
+                    html += `<td>${f1}</td>`;
+                    if (dimF2) html += `<td>${f2}</td>`;
+                    if (dimCol) {
+                        colKeys.forEach(c => {
+                            html += `<td style="text-align:right;">${fmtNumPivot(finalizarAccPivot(cell.get([f1, f2, c].join(SEP_PIVOT)), medida))}</td>`;
+                        });
+                    }
+                    html += `<td style="text-align:right; font-weight:bold;">${fmtNumPivot(finalizarAccPivot(rowTot.get([f1, f2].join(SEP_PIVOT)), medida))}</td>`;
+                    html += '</tr>';
+                });
+
+                if (dimF2) {
+                    html += '<tr class="fila-subtotal-pivot">';
+                    html += `<td>Subtotal — ${f1}</td><td></td>`;
+                    if (dimCol) {
+                        colKeys.forEach(c => {
+                            html += `<td style="text-align:right;">${fmtNumPivot(finalizarAccPivot(f1Col.get([f1, c].join(SEP_PIVOT)), medida))}</td>`;
+                        });
+                    }
+                    html += `<td style="text-align:right;">${fmtNumPivot(finalizarAccPivot(f1Tot.get(f1), medida))}</td>`;
+                    html += '</tr>';
+                }
+            });
+
+            html += '<tr class="fila-total-pivot">';
+            html += '<td>TOTAL GENERAL</td>';
+            if (dimF2) html += '<td></td>';
+            if (dimCol) {
+                colKeys.forEach(c => {
+                    html += `<td style="text-align:right;">${fmtNumPivot(finalizarAccPivot(colTot.get(c), medida))}</td>`;
+                });
+            }
+            html += `<td style="text-align:right;">${fmtNumPivot(finalizarAccPivot(grand, medida))}</td>`;
+            html += '</tr>';
+
+            html += '</tbody></table></div>';
+            cont.innerHTML = html;
         }
 
         function exportarTablaAExcel() {

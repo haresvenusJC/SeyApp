@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reporte de Ubicaciones de Visitas - Sey</title>
+
+    <!-- SDK de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Leaflet (mapa incrustado con OpenStreetMap) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #e6007e, #6b21a8);
+            background-attachment: fixed;
+            color: #333;
+            display: flex;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            height: fit-content;
+            margin-bottom: 40px;
+        }
+
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .header-bar h2 { color: #6b21a8; margin: 0; }
+
+        button {
+            background: #6b21a8;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: bold;
+        }
+        button:hover { background: #551a8b; }
+
+        select, input[type="date"] {
+            padding: 9px 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .filters-bar {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+        }
+        .filters-bar label { font-size: 0.8rem; display: block; font-weight: bold; margin-bottom: 4px; color: #4b5563; }
+        .btn-secundario { background: #2563eb; }
+        .btn-secundario:hover { background: #1d4ed8; }
+        .btn-chip { background: #e9d5ff; color: #6b21a8; padding: 9px 12px; font-size: 0.85rem; }
+        .btn-chip:hover { background: #d8b4fe; }
+
+        .resumen-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 18px;
+        }
+        .resumen-card {
+            background: #fdfdfd;
+            border: 1px solid #e0e0e0;
+            border-left: 5px solid #6b21a8;
+            padding: 10px 16px;
+            border-radius: 6px;
+        }
+        .resumen-card .n { font-size: 1.4rem; font-weight: bold; color: #6b21a8; display: block; }
+        .resumen-card .t { font-size: 0.8rem; color: #666; }
+
+        #mapa {
+            width: 100%;
+            height: 480px;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            margin-bottom: 12px;
+            z-index: 1;
+        }
+
+        .map-tools {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 25px;
+        }
+
+        .dia-seccion {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            margin-bottom: 18px;
+            overflow: hidden;
+        }
+        .dia-cabecera {
+            background: #f8f9fa;
+            padding: 12px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .dia-cabecera .dia-titulo { font-weight: bold; color: #6b21a8; text-transform: capitalize; }
+        .dia-cabecera .dia-conteo {
+            background: #f3e8ff;
+            color: #6b21a8;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .btn-gmaps {
+            display: inline-block;
+            background: #16a34a;
+            color: white;
+            padding: 7px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        .btn-gmaps:hover { background: #15803d; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+        }
+        th, td {
+            border-bottom: 1px solid #e2e8f0;
+            padding: 9px 12px;
+            text-align: left;
+            vertical-align: middle;
+        }
+        th { background: #fff; color: #6b21a8; }
+        tr:hover td { background: #faf5ff; }
+
+        .badge-cadena {
+            background: #e9d5ff;
+            color: #6b21a8;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .pin-lista {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            color: #fff;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .link-ver-mapa {
+            color: #2563eb;
+            font-weight: bold;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .link-ver-mapa:hover { text-decoration: underline; }
+        .sin-coords { color: #b91c1c; font-size: 0.82rem; font-weight: bold; }
+
+        .estado-msg { text-align: center; color: #6b21a8; font-weight: bold; padding: 25px; }
+        .error-msg { text-align: center; color: #b91c1c; font-weight: bold; padding: 25px; }
+
+        .leaflet-popup-content { font-size: 0.85rem; line-height: 1.4; }
+        .leaflet-popup-content b { color: #6b21a8; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="header-bar">
+            <h2>🗺️ Ubicaciones de Visitas por Día</h2>
+            <button onclick="window.location.href='backoffice.html'" style="background: #6c757d; padding: 8px 14px; font-size: 0.9rem;">⬅ Volver al Back Office</button>
+        </div>
+
+        <div class="filters-bar">
+            <div>
+                <label>Desde</label>
+                <input type="date" id="f-desde">
+            </div>
+            <div>
+                <label>Hasta</label>
+                <input type="date" id="f-hasta">
+            </div>
+            <button onclick="cargarReporte()">Actualizar</button>
+            <button class="btn-chip" onclick="rangoRapido(0)">Hoy</button>
+            <button class="btn-chip" onclick="rangoRapido(6)">Últimos 7 días</button>
+            <button class="btn-chip" onclick="rangoRapido(29)">Últimos 30 días</button>
+        </div>
+
+        <div class="resumen-bar" id="resumen-bar"></div>
+
+        <div id="mapa"></div>
+
+        <div class="map-tools">
+            <div>
+                <label style="font-size: 0.8rem; font-weight: bold; color: #4b5563; margin-right: 6px;">Centrar mapa en:</label>
+                <select id="select-dia-mapa" onchange="enfocarDiaEnMapa(this.value)">
+                    <option value="">Todos los días del rango</option>
+                </select>
+            </div>
+            <span style="font-size: 0.8rem; color: #666;">Cada pin abre un globo con el detalle y un enlace a Google Maps.</span>
+        </div>
+
+        <div id="contenedor-dias">
+            <p class="estado-msg">Selecciona un rango de fechas y presiona «Actualizar».</p>
+        </div>
+    </div>
+
+    <script>
+        /* ====== Configuración Supabase (misma que el resto de la app) ====== */
+        const SUPABASE_URL = 'https://snjvdfjouoxnaopgeral.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNuanZkZmpvdW94bmFvcGdlcmFsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxOTI2MzEsImV4cCI6MjEwMDc2ODYzMX0.CIrxhWZtySmv42iZfFGHgyavP6uxA44kbbBQlQNc8uc';
+
+        let supabaseClient;
+        try {
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        } catch (e) {
+            console.error('Error al inicializar Supabase:', e);
+        }
+
+        /* ====== Guardia de sesión (igual que backoffice.html) ====== */
+        (function validarSesion() {
+            const sesionActiva = sessionStorage.getItem('bo_sesion_activa');
+            const rol = sessionStorage.getItem('bo_rol');
+            if (sesionActiva !== 'true' || rol !== 'admin') {
+                window.location.href = 'backoffice.html';
+            }
+        })();
+
+        const COLORES_DIA = ['#6b21a8', '#e6007e', '#2563eb', '#16a34a', '#ea580c', '#0891b2', '#9333ea', '#dc2626', '#ca8a04', '#4f46e5', '#0d9488', '#db2777'];
+
+        let map = null;
+        let capaMarcadores = null;
+        let gruposDia = [];          // [{ dia, fecha, color, visitas:[{...}], puntos:[{lat,lon}] }]
+        let marcadoresPorDia = {};   // dia -> [L.marker]
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Toma el rango de fechas del menú del back office si viene en la URL (?desde=&hasta=)
+            const params = new URLSearchParams(location.search);
+            const hoy = new Date().toISOString().split('T')[0];
+            document.getElementById('f-desde').value = params.get('desde') || hoy;
+            document.getElementById('f-hasta').value = params.get('hasta') || hoy;
+            inicializarMapa();
+            cargarReporte();
+        });
+
+        function inicializarMapa() {
+            // Vista inicial aproximada (Monterrey, N.L.); se ajusta con fitBounds al cargar datos.
+            map = L.map('mapa').setView([25.6866, -100.3161], 11);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; Colaboradores de OpenStreetMap'
+            }).addTo(map);
+            capaMarcadores = L.layerGroup().addTo(map);
+        }
+
+        function rangoRapido(diasAtras) {
+            const hoy = new Date();
+            const inicio = new Date();
+            inicio.setDate(hoy.getDate() - diasAtras);
+            document.getElementById('f-hasta').value = hoy.toISOString().split('T')[0];
+            document.getElementById('f-desde').value = inicio.toISOString().split('T')[0];
+            cargarReporte();
+        }
+
+        /* ====== Resolución de coordenadas: MISMA lógica que index.html ======
+           1) columnas sucursales.latitud / sucursales.longitud
+           2) fallback: texto "Lat: .. Lon: .." dentro de sucursales.direccion   */
+        function obtenerCoordsSucursal(suc) {
+            if (!suc) return null;
+            let lat = null, lon = null;
+
+            if (suc.latitud && suc.longitud) {
+                lat = parseFloat(suc.latitud);
+                lon = parseFloat(suc.longitud);
+            } else if (suc.direccion) {
+                const mLat = suc.direccion.match(/Lat:\s*([-\d.]+)/i);
+                const mLon = suc.direccion.match(/Lon:\s*([-\d.]+)/i);
+                if (mLat && mLon) {
+                    lat = parseFloat(mLat[1]);
+                    lon = parseFloat(mLon[1]);
+                }
+            }
+
+            if (lat === null || lon === null || isNaN(lat) || isNaN(lon)) return null;
+            return { lat, lon };
+        }
+
+        function claveDia(iso) {
+            const d = new Date(iso);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${dd}`;
+        }
+
+        function etiquetaDia(diaStr) {
+            const d = new Date(diaStr + 'T12:00:00');
+            return d.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        }
+
+        function horaCorta(iso) {
+            return new Date(iso).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        async function cargarReporte() {
+            const cont = document.getElementById('contenedor-dias');
+            const desde = document.getElementById('f-desde').value;
+            const hasta = document.getElementById('f-hasta').value;
+            cont.innerHTML = '<p class="estado-msg">Cargando visitas…</p>';
+
+            try {
+                let query = supabaseClient
+                    .from('visitas_auditoria')
+                    .select('*')
+                    .order('created_at', { ascending: true });
+
+                if (desde) query = query.gte('created_at', `${desde}T00:00:00`);
+                if (hasta) query = query.lte('created_at', `${hasta}T23:59:59`);
+
+                const { data: visitas, error } = await query;
+                if (error) throw error;
+
+                const { data: sucursales, error: errSuc } = await supabaseClient.from('sucursales').select('*');
+                if (errSuc) throw errSuc;
+
+                const mapaSuc = {};
+                (sucursales || []).forEach(s => { mapaSuc[s.id] = s; });
+
+                procesarDatos(visitas || [], mapaSuc);
+            } catch (err) {
+                console.error(err);
+                cont.innerHTML = `<p class="error-msg">Error al cargar el reporte: ${err.message}</p>`;
+            }
+        }
+
+        function procesarDatos(visitas, mapaSuc) {
+            const cont = document.getElementById('contenedor-dias');
+            const selectDia = document.getElementById('select-dia-mapa');
+
+            capaMarcadores.clearLayers();
+            marcadoresPorDia = {};
+            gruposDia = [];
+            selectDia.innerHTML = '<option value="">Todos los días del rango</option>';
+
+            if (visitas.length === 0) {
+                document.getElementById('resumen-bar').innerHTML = '';
+                cont.innerHTML = '<p class="estado-msg">No hay visitas registradas en el rango seleccionado.</p>';
+                return;
+            }
+
+            // Agrupar por día
+            const porDia = {};
+            visitas.forEach(v => {
+                const dia = claveDia(v.created_at);
+                if (!porDia[dia]) porDia[dia] = [];
+                porDia[dia].push(v);
+            });
+
+            const dias = Object.keys(porDia).sort();
+            let totalConCoords = 0;
+            let totalSinCoords = 0;
+
+            dias.forEach((dia, idx) => {
+                const color = COLORES_DIA[idx % COLORES_DIA.length];
+                const registros = porDia[dia].map(v => {
+                    const suc = mapaSuc[v.sucursal_id] || null;
+                    const coords = obtenerCoordsSucursal(suc);
+                    return {
+                        visita: v,
+                        sucursal: suc,
+                        nombreSucursal: suc ? suc.nombre_sucursal : ('Sucursal ID: ' + v.sucursal_id),
+                        cadena: suc ? (suc.cadena || (suc.nombre_sucursal ? suc.nombre_sucursal.split(' - ')[0] : 'GENERAL')) : 'GENERAL',
+                        coords
+                    };
+                });
+
+                const puntos = [];
+                registros.forEach(r => {
+                    if (r.coords) { totalConCoords++; puntos.push(r.coords); }
+                    else { totalSinCoords++; }
+                });
+
+                gruposDia.push({ dia, color, registros, puntos });
+
+                const opt = document.createElement('option');
+                opt.value = dia;
+                opt.textContent = etiquetaDia(dia) + ` (${registros.length})`;
+                selectDia.appendChild(opt);
+            });
+
+            // Resumen
+            document.getElementById('resumen-bar').innerHTML = `
+                <div class="resumen-card"><span class="n">${visitas.length}</span><span class="t">Visitas en el rango</span></div>
+                <div class="resumen-card"><span class="n">${dias.length}</span><span class="t">Días con visitas</span></div>
+                <div class="resumen-card"><span class="n">${totalConCoords}</span><span class="t">Ubicadas en el mapa</span></div>
+                <div class="resumen-card" style="border-left-color:#b91c1c;"><span class="n" style="color:#b91c1c;">${totalSinCoords}</span><span class="t">Sin coordenadas de sucursal</span></div>
+            `;
+
+            dibujarMarcadores();
+            renderizarSecciones();
+        }
+
+        function iconoNumerado(numero, color) {
+            return L.divIcon({
+                className: 'pin-numerado',
+                html: `<div style="background:${color};width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;">
+                         <span style="transform:rotate(45deg);color:#fff;font-size:12px;font-weight:bold;">${numero}</span>
+                       </div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 28],
+                popupAnchor: [0, -28]
+            });
+        }
+
+        function urlGoogleMapsPunto(lat, lon) {
+            return `https://www.google.com/maps?q=${lat},${lon}`;
+        }
+
+        function urlGoogleMapsDia(puntos) {
+            if (puntos.length === 0) return null;
+            if (puntos.length === 1) return urlGoogleMapsPunto(puntos[0].lat, puntos[0].lon);
+            // Google Maps admite ~10 puntos en un recorrido /dir/
+            const tramos = puntos.slice(0, 10).map(p => `${p.lat},${p.lon}`).join('/');
+            return `https://www.google.com/maps/dir/${tramos}`;
+        }
+
+        function dibujarMarcadores() {
+            capaMarcadores.clearLayers();
+            marcadoresPorDia = {};
+            const todosLosPuntos = [];
+
+            gruposDia.forEach(g => {
+                marcadoresPorDia[g.dia] = [];
+                let n = 0;
+                g.registros.forEach(r => {
+                    if (!r.coords) return;
+                    n++;
+                    const { lat, lon } = r.coords;
+                    const popup = `
+                        <b>${r.nombreSucursal}</b><br>
+                        <span style="color:#6b21a8;font-weight:bold;">${r.cadena}</span><br>
+                        📅 ${etiquetaDia(g.dia)}<br>
+                        🕒 ${horaCorta(r.visita.created_at)} &nbsp;·&nbsp; 👤 ${r.visita.usuario || 'N/D'}<br>
+                        <a href="${urlGoogleMapsPunto(lat, lon)}" target="_blank" rel="noopener" style="color:#16a34a;font-weight:bold;">🗺️ Abrir en Google Maps</a>
+                    `;
+                    const marcador = L.marker([lat, lon], { icon: iconoNumerado(n, g.color) }).bindPopup(popup);
+                    marcador.addTo(capaMarcadores);
+                    marcadoresPorDia[g.dia].push(marcador);
+                    todosLosPuntos.push([lat, lon]);
+                });
+            });
+
+            if (todosLosPuntos.length > 0) {
+                map.fitBounds(L.latLngBounds(todosLosPuntos).pad(0.15));
+            }
+            setTimeout(() => map.invalidateSize(), 100);
+        }
+
+        function enfocarDiaEnMapa(dia) {
+            if (!dia) {
+                const todos = [];
+                Object.values(marcadoresPorDia).forEach(arr => arr.forEach(m => todos.push(m.getLatLng())));
+                if (todos.length > 0) map.fitBounds(L.latLngBounds(todos).pad(0.15));
+                return;
+            }
+            const marcadores = marcadoresPorDia[dia] || [];
+            if (marcadores.length === 0) {
+                alert('Ese día no tiene visitas con coordenadas guardadas.');
+                return;
+            }
+            const puntos = marcadores.map(m => m.getLatLng());
+            map.fitBounds(L.latLngBounds(puntos).pad(0.25));
+            if (marcadores.length === 1) marcadores[0].openPopup();
+        }
+
+        function renderizarSecciones() {
+            const cont = document.getElementById('contenedor-dias');
+            let html = '';
+
+            gruposDia.forEach(g => {
+                const urlDia = urlGoogleMapsDia(g.puntos);
+                const btnDia = urlDia
+                    ? `<a class="btn-gmaps" href="${urlDia}" target="_blank" rel="noopener">🗺️ Ver el día en Google Maps${g.puntos.length > 10 ? ' (primeras 10)' : ''}</a>`
+                    : `<span class="sin-coords">Ningún punto con coordenadas este día</span>`;
+
+                html += `
+                    <div class="dia-seccion">
+                        <div class="dia-cabecera">
+                            <div>
+                                <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${g.color};margin-right:8px;"></span>
+                                <span class="dia-titulo">${etiquetaDia(g.dia)}</span>
+                                <span class="dia-conteo">${g.registros.length} visita${g.registros.length === 1 ? '' : 's'}</span>
+                            </div>
+                            ${btnDia}
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th style="width:34px;">#</th>
+                                        <th style="width:60px;">Hora</th>
+                                        <th>Auditor</th>
+                                        <th>Cadena</th>
+                                        <th>Sucursal</th>
+                                        <th>Ubicación</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+
+                let n = 0;
+                g.registros.forEach(r => {
+                    const tieneCoords = !!r.coords;
+                    if (tieneCoords) n++;
+                    const celdaPin = tieneCoords
+                        ? `<span class="pin-lista" style="background:${g.color};">${n}</span>`
+                        : `<span class="pin-lista" style="background:#cbd5e1;color:#64748b;">–</span>`;
+
+                    const celdaUbic = tieneCoords
+                        ? `<a class="link-ver-mapa" onclick="abrirPinDia('${g.dia}', ${n - 1})">Ver en el mapa</a>
+                           &nbsp;|&nbsp;
+                           <a class="link-ver-mapa" href="${urlGoogleMapsPunto(r.coords.lat, r.coords.lon)}" target="_blank" rel="noopener">Google Maps ↗</a>
+                           <div style="font-size:0.75rem;color:#94a3b8;">${r.coords.lat.toFixed(5)}, ${r.coords.lon.toFixed(5)}</div>`
+                        : `<span class="sin-coords">Sin coordenadas de sucursal</span>`;
+
+                    html += `
+                        <tr>
+                            <td>${celdaPin}</td>
+                            <td>${horaCorta(r.visita.created_at)}</td>
+                            <td><b>${r.visita.usuario || 'N/D'}</b></td>
+                            <td><span class="badge-cadena">${r.cadena}</span></td>
+                            <td>${r.nombreSucursal}</td>
+                            <td>${celdaUbic}</td>
+                        </tr>
+                    `;
+                });
+
+                html += `</tbody></table></div></div>`;
+            });
+
+            cont.innerHTML = html;
+        }
+
+        function abrirPinDia(dia, indice) {
+            const marcadores = marcadoresPorDia[dia] || [];
+            const m = marcadores[indice];
+            if (!m) return;
+            document.getElementById('mapa').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => {
+                map.setView(m.getLatLng(), 16);
+                m.openPopup();
+            }, 300);
+        }
+    </script>
+</body>
+</html>
