@@ -202,9 +202,81 @@
 
         .leaflet-popup-content { font-size: 0.85rem; line-height: 1.4; }
         .leaflet-popup-content b { color: #6b21a8; }
+
+        /* Menú lateral deslizante (mismo comportamiento que el Back Office) */
+        #sidebar-menu {
+            position: fixed;
+            top: 0;
+            left: -320px;
+            width: 300px;
+            height: 100%;
+            background: #ffffff;
+            box-shadow: 4px 0 15px rgba(0,0,0,0.2);
+            transition: left 0.3s ease;
+            z-index: 1000;
+            padding: 20px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        #sidebar-menu.open { left: 0; }
+        .hamburger-btn {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: #6b21a8;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            z-index: 1001;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .pivot-config-box {
+            background: #f8f9fa;
+            border: 1px solid #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 <body>
+
+    <button class="hamburger-btn" id="btn-sandwich" onclick="toggleSidebar()">☰ Menú</button>
+
+    <div id="sidebar-menu" class="open">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h3 style="margin:0; color:#6b21a8;">Panel del Mapa</h3>
+            <button onclick="toggleSidebar()" style="background:none; border:none; font-size:20px; color:#666; padding:0; cursor:pointer; width:auto; font-weight:bold;">✕</button>
+        </div>
+
+        <div class="pivot-config-box">
+            <label style="font-weight:bold; color:#444; font-size:0.9rem; display:block; margin-bottom:8px;">Navegación</label>
+            <button onclick="window.location.href='backoffice.html'" style="width:100%; background:#6c757d;">📊 Volver al Dashboard / Back Office</button>
+        </div>
+
+        <div class="pivot-config-box">
+            <label style="font-weight:bold; color:#444; font-size:0.9rem; display:block; margin-bottom:5px;">Rango de fechas del mapa</label>
+            <input type="date" id="f-desde" style="width:100%; margin-bottom:8px;">
+            <input type="date" id="f-hasta" style="width:100%; margin-bottom:10px;">
+            <button onclick="cargarReporte()" style="width:100%;">Actualizar mapa</button>
+            <div style="display:flex; gap:6px; margin-top:8px;">
+                <button class="btn-chip" onclick="rangoRapido(0)" style="flex:1;">Hoy</button>
+                <button class="btn-chip" onclick="rangoRapido(6)" style="flex:1;">7 días</button>
+                <button class="btn-chip" onclick="rangoRapido(29)" style="flex:1;">30 días</button>
+            </div>
+        </div>
+
+        <div class="pivot-config-box">
+            <label style="font-weight:bold; color:#444; font-size:0.9rem; display:block; margin-bottom:5px;">Centrar mapa en</label>
+            <select id="select-dia-mapa" onchange="enfocarDiaEnMapa(this.value)" style="width:100%;">
+                <option value="">Todos los días del rango</option>
+            </select>
+        </div>
+    </div>
 
     <div class="container">
         <div class="header-bar">
@@ -212,33 +284,12 @@
             <button onclick="window.location.href='backoffice.html'" style="background: #6c757d; padding: 8px 14px; font-size: 0.9rem;">⬅ Volver al Back Office</button>
         </div>
 
-        <div class="filters-bar">
-            <div>
-                <label>Desde</label>
-                <input type="date" id="f-desde">
-            </div>
-            <div>
-                <label>Hasta</label>
-                <input type="date" id="f-hasta">
-            </div>
-            <button onclick="cargarReporte()">Actualizar</button>
-            <button class="btn-chip" onclick="rangoRapido(0)">Hoy</button>
-            <button class="btn-chip" onclick="rangoRapido(6)">Últimos 7 días</button>
-            <button class="btn-chip" onclick="rangoRapido(29)">Últimos 30 días</button>
-        </div>
-
         <div class="resumen-bar" id="resumen-bar"></div>
 
         <div id="mapa"></div>
 
         <div class="map-tools">
-            <div>
-                <label style="font-size: 0.8rem; font-weight: bold; color: #4b5563; margin-right: 6px;">Centrar mapa en:</label>
-                <select id="select-dia-mapa" onchange="enfocarDiaEnMapa(this.value)">
-                    <option value="">Todos los días del rango</option>
-                </select>
-            </div>
-            <span style="font-size: 0.8rem; color: #666;">Cada pin abre un globo con el detalle y un enlace a Google Maps.</span>
+            <span style="font-size: 0.8rem; color: #666;">Cada pin abre un globo con el detalle y un enlace a Google Maps. Usa el menú ☰ de la izquierda para cambiar el rango de fechas o volver al Back Office.</span>
         </div>
 
         <div id="contenedor-dias">
@@ -274,6 +325,10 @@
         let gruposDia = [];          // [{ dia, fecha, color, visitas:[{...}], puntos:[{lat,lon}] }]
         let marcadoresPorDia = {};   // dia -> [L.marker]
 
+        function toggleSidebar() {
+            document.getElementById('sidebar-menu').classList.toggle('open');
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             // Toma el rango de fechas del menú del back office si viene en la URL (?desde=&hasta=)
             const params = new URLSearchParams(location.search);
@@ -286,7 +341,9 @@
 
         function inicializarMapa() {
             // Vista inicial aproximada (Monterrey, N.L.); se ajusta con fitBounds al cargar datos.
-            map = L.map('mapa').setView([25.6866, -100.3161], 11);
+            // Control de zoom a la derecha para no chocar con el botón ☰ del menú.
+            map = L.map('mapa', { zoomControl: false }).setView([25.6866, -100.3161], 11);
+            L.control.zoom({ position: 'topright' }).addTo(map);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 maxZoom: 19,
                 attribution: '&copy; Colaboradores de OpenStreetMap'

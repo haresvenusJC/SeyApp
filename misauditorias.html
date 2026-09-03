@@ -180,7 +180,8 @@
     <div class="container">
         <div class="header-bar">
             <div>
-                <h2>📋 Detalle de Inventarios y Evidencias por Sucursal</h2>
+                <h2>📋 Mis Auditorías</h2>
+                <p style="margin: 4px 0 0; color: #666; font-size: 0.9rem;">Auditor: <b id="lbl-usuario"></b></p>
             </div>
             <button onclick="window.location.href='index.html'" style="background: #6c757d; width: auto; padding: 6px 12px; font-size: 0.9rem;">⬅ Volver a App</button>
         </div>
@@ -245,6 +246,8 @@
                 return;
             }
 
+            document.getElementById("lbl-usuario").textContent = usuarioActual;
+
             const hoy = new Date().toISOString().split('T')[0];
             document.getElementById("filtro-desde").value = hoy;
             document.getElementById("filtro-hasta").value = hoy;
@@ -284,6 +287,7 @@
                 let { data, error } = await supabaseClient
                     .from('visitas_auditoria')
                     .select('*')
+                    .eq('usuario', usuarioActual)
                     .order('created_at', { ascending: false });
 
                 if (error) throw error;
@@ -319,7 +323,7 @@
                 window.auditoriasCache = registrosFiltrados;
 
                 if (!window.auditoriasCache || window.auditoriasCache.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: #666; padding: 20px;">No se encontraron auditorías para el rango de fechas seleccionado.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color: #666; padding: 20px;">No tienes auditorías registradas para el rango de fechas seleccionado.</td></tr>`;
                     return;
                 }
 
