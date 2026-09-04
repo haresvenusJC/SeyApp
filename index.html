@@ -11,6 +11,8 @@
 
     <!-- SDK de Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Lectura de metadatos EXIF de las fotos (fecha de captura, GPS, cámara) -->
+    <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
     <style>
         /* Fondo degradado general para toda la aplicación y pantallas */
         body { 
@@ -334,6 +336,10 @@
         window.archivosAnaquel = [];
         window.archivosAcciones = [];
 
+        // Metadatos (EXIF + tiempos) de las fotos, para el resumen al cerrar la auditoría
+        window.metaFotos = { anaquel: [], acciones: [], fachada: [] };
+        window.tsEntradaInventario = null;
+
         function mostrarProgreso(texto, porcentaje) {
             const overlay = document.getElementById('upload-overlay');
             const statusText = document.getElementById('upload-status-text');
@@ -393,6 +399,48 @@
                 reader.onerror = (error) => reject(error);
                 reader.readAsDataURL(file);
             });
+        }
+
+        // Lee los metadatos EXIF del archivo ORIGINAL (antes de comprimir a WebP, que borra el EXIF).
+        // Nunca lanza: si no hay EXIF o falla la librería, devuelve el objeto con campos en null.
+        async function extraerMetadatosFoto(file, campo, comprimida) {
+            let exif = null;
+            try {
+                if (typeof exifr !== 'undefined' && exifr && exifr.parse) {
+                    exif = await exifr.parse(file, { tiff: true, ifd0: true, exif: true, gps: true });
+                }
+            } catch (e) {
+                exif = null;
+            }
+
+            const lat = exif && typeof exif.latitude === 'number' ? exif.latitude : null;
+            const lon = exif && typeof exif.longitude === 'number' ? exif.longitude : null;
+
+            let tomadaTs = null;
+            if (exif && exif.DateTimeOriginal instanceof Date && !isNaN(exif.DateTimeOriginal)) {
+                tomadaTs = exif.DateTimeOriginal.getTime();
+            }
+
+            let distAuditoria = null;
+            if (lat !== null && lon !== null && window.currentLat && window.currentLon) {
+                distAuditoria = Math.round(calcularDistanciaMetros(window.currentLat, window.currentLon, lat, lon));
+            }
+
+            return {
+                campo: campo,
+                nombre: file && file.name ? file.name : null,
+                tipo: file && file.type ? file.type : null,
+                peso_original: file && file.size ? file.size : null,
+                peso_comprimido: comprimida && comprimida.size ? comprimida.size : null,
+                last_modified: file && file.lastModified ? file.lastModified : null,
+                seleccionada_ts: Date.now(),
+                exif_tomada_ts: tomadaTs,
+                exif_lat: lat,
+                exif_lon: lon,
+                exif_tiene_gps: (lat !== null && lon !== null),
+                exif_camara: exif ? ([exif.Make, exif.Model].filter(Boolean).join(' ').trim() || null) : null,
+                dist_vs_auditoria_m: distAuditoria
+            };
         }
 
         document.addEventListener("DOMContentLoaded", () => {
@@ -631,11 +679,13 @@
             const contenedor = document.getElementById('contenedor-preview-sucursal');
             contenedor.innerHTML = '';
             window.archivoFotoSucursal = null;
+            window.metaFotos.fachada = [];
 
             if (archivoOriginal) {
                 try {
                     const archivoComprimido = await comprimirImagenWebP(archivoOriginal);
                     window.archivoFotoSucursal = archivoComprimido;
+                    window.metaFotos.fachada = [await extraerMetadatosFoto(archivoOriginal, 'fachada', archivoComprimido)];
 
                     const reader = new FileReader();
                     reader.onload = function(e) {
@@ -662,6 +712,7 @@
                 errorContainer.innerText = `⚠️ Debes seleccionar entre ${min} y ${max} fotografías (Seleccionadas: ${files.length}).`;
                 if (tipo === 'anaquel') window.archivosAnaquel = [];
                 if (tipo === 'acciones') window.archivosAcciones = [];
+                window.metaFotos[tipo] = [];
                 return;
             }
 
@@ -669,10 +720,12 @@
 
             try {
                 let archivosComprimidosArray = [];
+                let metaLocal = [];
 
                 for (let file of files) {
                     const comprimida = await comprimirImagenWebP(file);
                     archivosComprimidosArray.push(comprimida);
+                    metaLocal.push(await extraerMetadatosFoto(file, tipo, comprimida));
 
                     const reader = new FileReader();
                     reader.onload = function(e) {
@@ -686,10 +739,12 @@
 
                 if (tipo === 'anaquel') window.archivosAnaquel = archivosComprimidosArray;
                 if (tipo === 'acciones') window.archivosAcciones = archivosComprimidosArray;
+                window.metaFotos[tipo] = metaLocal;
                 errorContainer.innerText = '';
 
             } catch (err) {
                 errorContainer.innerText = 'Error al procesar las imágenes.';
+                window.metaFotos[tipo] = [];
                 console.error(err);
             }
         }
@@ -759,6 +814,7 @@
             document.getElementById('vista-sucursal').classList.add('oculto');
             document.getElementById('vista-inventario').classList.remove('oculto');
             document.getElementById('info-sucursal-activa').innerText = `Sucursal: ${window.nombreSucursalSeleccionada}`;
+            window.tsEntradaInventario = Date.now();
 
             await cargarProductosInventario();
         }
@@ -835,6 +891,75 @@
             return urlsSubidas;
         }
 
+        // Arma el objeto de metadatos + tiempos que se guarda junto a la auditoría.
+        function construirResumenMetadatos(tsSubidaInicio, tsSubidaFin) {
+            const todas = [].concat(
+                window.metaFotos.anaquel || [],
+                window.metaFotos.acciones || [],
+                window.metaFotos.fachada || []
+            );
+            const tsGuardado = Date.now();
+            const sel = todas.map(m => m.seleccionada_ts).filter(Boolean);
+            const primeraSel = sel.length ? Math.min.apply(null, sel) : null;
+            const ultimaSel = sel.length ? Math.max.apply(null, sel) : null;
+            const conGps = todas.filter(m => m.exif_tiene_gps);
+            const dists = conGps.map(m => m.dist_vs_auditoria_m).filter(v => v !== null && v !== undefined);
+            const exifFechas = todas.map(m => m.exif_tomada_ts).filter(Boolean);
+
+            return {
+                version: 1,
+                generado_ts: tsGuardado,
+                gps_auditoria: { lat: window.currentLat, lon: window.currentLon },
+                tiempos: {
+                    entrada_inventario_ts: window.tsEntradaInventario,
+                    primera_foto_seleccionada_ts: primeraSel,
+                    ultima_foto_seleccionada_ts: ultimaSel,
+                    subida_inicio_ts: tsSubidaInicio,
+                    subida_fin_ts: tsSubidaFin,
+                    guardado_ts: tsGuardado,
+                    ms_seleccion_fotos: (primeraSel && ultimaSel) ? (ultimaSel - primeraSel) : null,
+                    ms_desde_ultima_foto_a_envio: ultimaSel ? (tsSubidaInicio - ultimaSel) : null,
+                    ms_subida: tsSubidaFin - tsSubidaInicio,
+                    ms_total_auditoria: window.tsEntradaInventario ? (tsGuardado - window.tsEntradaInventario) : null
+                },
+                resumen: {
+                    total_fotos: todas.length,
+                    fotos_anaquel: (window.metaFotos.anaquel || []).length,
+                    fotos_acciones: (window.metaFotos.acciones || []).length,
+                    fotos_fachada: (window.metaFotos.fachada || []).length,
+                    fotos_con_gps_exif: conGps.length,
+                    fotos_con_fecha_exif: exifFechas.length,
+                    dist_gps_max_m: dists.length ? Math.max.apply(null, dists) : null,
+                    dist_gps_promedio_m: dists.length ? Math.round(dists.reduce((a, b) => a + b, 0) / dists.length) : null,
+                    antiguedad_foto_max_ms: exifFechas.length ? (tsGuardado - Math.min.apply(null, exifFechas)) : null,
+                    peso_original_total: todas.reduce((a, m) => a + (m.peso_original || 0), 0),
+                    peso_comprimido_total: todas.reduce((a, m) => a + (m.peso_comprimido || 0), 0)
+                },
+                fotos: todas
+            };
+        }
+
+        // Texto del resumen que se muestra al auditor al cerrar la auditoría.
+        function textoResumenMetadatos(md) {
+            const r = md.resumen, t = md.tiempos;
+            const seg = ms => (ms === null || ms === undefined) ? '—' : (ms / 1000).toFixed(1) + ' s';
+            const min = ms => (ms === null || ms === undefined) ? '—' : (ms / 60000).toFixed(1) + ' min';
+            let txt = '✅ Visita, inventario y evidencias registradas.\n\n';
+            txt += `📸 Fotos: ${r.total_fotos} (anaquel ${r.fotos_anaquel}, acciones ${r.fotos_acciones}, fachada ${r.fotos_fachada})\n`;
+            txt += `🛰️ Con GPS en metadatos: ${r.fotos_con_gps_exif} / ${r.total_fotos}\n`;
+            if (r.dist_gps_max_m !== null) {
+                txt += `📍 Diferencia GPS foto vs auditoría: máx ${r.dist_gps_max_m} m · prom ${r.dist_gps_promedio_m} m\n`;
+            } else {
+                txt += `📍 Las fotos no traen GPS en sus metadatos (no se puede comparar la ubicación)\n`;
+            }
+            txt += `⏱️ Subida de fotos: ${seg(t.ms_subida)}\n`;
+            txt += `⏱️ Tiempo total de la auditoría: ${min(t.ms_total_auditoria)}\n`;
+            if (r.antiguedad_foto_max_ms !== null && r.antiguedad_foto_max_ms > 3600000) {
+                txt += `\n⚠️ Una foto fue tomada hace ${min(r.antiguedad_foto_max_ms)} — verifica que sea reciente.`;
+            }
+            return txt;
+        }
+
         async function guardarVisitaEInventario() {
             const comentarios = document.getElementById('input-comentarios').value.trim();
             const inputsStock = document.querySelectorAll('.input-stock');
@@ -858,8 +983,10 @@
             try {
                 mostrarProgreso("Preparando archivos y conectando con el servidor...", 5);
 
+                const tsSubidaInicio = Date.now();
                 const urlsAnaquel = await subirImágenesABucketConProgreso(window.archivosAnaquel, 'anaquel-evidencias', 10, 45);
                 const urlsAcciones = await subirImágenesABucketConProgreso(window.archivosAcciones, 'acciones-mejoras', 45, 80);
+                const tsSubidaFin = Date.now();
 
                 mostrarProgreso("Guardando inventario y reporte en la base de datos...", 90);
 
@@ -873,16 +1000,26 @@
                     });
                 });
 
-                const { error: insertError } = await supabaseClient
-                    .from('visitas_auditoria')
-                    .insert([{
-                        sucursal_id: window.sucursalSeleccionadaId,
-                        usuario: usuarioActual,
-                        comentarios: comentarios,
-                        fotos_anaquel: urlsAnaquel,
-                        fotos_acciones: urlsAcciones,
-                        inventario: inventarioData
-                    }]);
+                const metadatosFotos = construirResumenMetadatos(tsSubidaInicio, tsSubidaFin);
+
+                const filaVisita = {
+                    sucursal_id: window.sucursalSeleccionadaId,
+                    usuario: usuarioActual,
+                    comentarios: comentarios,
+                    fotos_anaquel: urlsAnaquel,
+                    fotos_acciones: urlsAcciones,
+                    inventario: inventarioData,
+                    metadatos_fotos: metadatosFotos
+                };
+
+                let { error: insertError } = await supabaseClient.from('visitas_auditoria').insert([filaVisita]);
+
+                // Si la columna metadatos_fotos aún no existe en la base, guarda la auditoría sin ella (no rompe nada).
+                if (insertError && (insertError.code === 'PGRST204' || /metadatos_fotos/i.test(insertError.message || ''))) {
+                    console.warn('La columna "metadatos_fotos" no existe en visitas_auditoria; se guarda la auditoría sin metadatos. Ejecuta la migración SQL para habilitarlo.');
+                    delete filaVisita.metadatos_fotos;
+                    ({ error: insertError } = await supabaseClient.from('visitas_auditoria').insert([filaVisita]));
+                }
 
                 if (insertError) throw insertError;
 
@@ -890,7 +1027,7 @@
 
                 setTimeout(() => {
                     ocultarProgreso();
-                    alert("¡Visita, inventario y evidencias registradas correctamente!");
+                    alert(textoResumenMetadatos(metadatosFotos));
                     location.reload();
                 }, 500);
 

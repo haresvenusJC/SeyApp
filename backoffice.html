@@ -433,6 +433,17 @@
         <p id="modal-contador"></p>
     </div>
 
+    <!-- MODAL DE METADATOS DE FOTOS Y TIEMPOS -->
+    <div id="modal-metadatos" class="oculto" style="position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 2100; display: flex; align-items: center; justify-content: center; padding: 20px;">
+        <div style="background: #fff; border-radius: 12px; max-width: 700px; width: 100%; max-height: 85vh; overflow-y: auto; padding: 22px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 14px;">
+                <h3 style="margin: 0; border: none;">🛰️ Metadatos de fotos y tiempos</h3>
+                <button onclick="document.getElementById('modal-metadatos').classList.add('oculto')" style="background: #6c757d; padding: 6px 12px;">✕ Cerrar</button>
+            </div>
+            <div id="modal-metadatos-cuerpo"></div>
+        </div>
+    </div>
+
     <!-- BOTÓN SANDWICH PARA MENÚ LATERAL (Oculto al inicio) -->
     <button class="hamburger-btn oculto" id="btn-sandwich" onclick="toggleSidebar()">☰ Reportes y Mapa</button>
 
@@ -1081,7 +1092,7 @@
             const mapaProductos = {};
             cacheGlobalProductos.forEach(p => { mapaProductos[p.id] = p.nombre_producto || p.codigo_barras || 'Producto'; });
 
-            visitas.forEach(v => {
+            visitas.forEach((v, idxVisita) => {
                 const fechaFormateada = new Date(v.created_at).toLocaleString();
                 const sucInfo = mapaSucursales[v.sucursal_id] || {};
                 const nombreSucursal = sucInfo.nombre_sucursal || 'Sucursal Desconocida';
@@ -1103,6 +1114,9 @@
                 if (urlsAnaquel.length === 0 && urlsAcciones.length === 0) {
                     htmlEvidencias = '<span style="color: #888; font-size: 0.85rem;">Sin archivos</span>';
                 }
+
+                const tieneMeta = v.metadatos_fotos && typeof v.metadatos_fotos === 'object';
+                htmlEvidencias += `<br><button onclick="mostrarResumenMetadatos(${idxVisita})" class="btn-link-evidencia" style="background: ${tieneMeta ? '#0891b2' : '#94a3b8'}; margin-top: 4px;" title="Metadatos EXIF y tiempos de la auditoría">🛰️ Metadatos</button>`;
 
                 let htmlInventarioDetalle = '<div class="inventario-scroll-box"><table class="tabla-inventario-mini"><thead><tr><th>Producto</th><th style="text-align:right; width:55px;">Cant.</th></tr></thead><tbody>';
                 
@@ -1131,6 +1145,60 @@
                 `;
                 tbody.appendChild(tr);
             });
+        }
+
+        // Muestra el resumen de metadatos EXIF + tiempos de una auditoría (para revisar demoras y GPS).
+        function mostrarResumenMetadatos(visitaIndex) {
+            const v = cacheGlobalVisitas[visitaIndex];
+            const cuerpo = document.getElementById('modal-metadatos-cuerpo');
+            const md = v && v.metadatos_fotos;
+
+            if (!md || typeof md !== 'object') {
+                cuerpo.innerHTML = '<p style="color:#666;">Esta auditoría no tiene metadatos de fotos guardados. Se registró antes de activar esta función, o la app no pudo leer los metadatos de las imágenes.</p>';
+                document.getElementById('modal-metadatos').classList.remove('oculto');
+                return;
+            }
+
+            const r = md.resumen || {};
+            const t = md.tiempos || {};
+            const g = md.gps_auditoria || {};
+            const dur = ms => (ms === null || ms === undefined) ? '—' : (ms < 60000 ? (ms / 1000).toFixed(1) + ' s' : (ms / 60000).toFixed(1) + ' min');
+            const ts = x => x ? new Date(x).toLocaleString() : '—';
+            const kb = b => b ? Math.round(b / 1024) + ' KB' : '—';
+
+            let html = '<table class="tabla-inventario-mini" style="margin-bottom:16px;"><tbody>';
+            html += `<tr><td>Fotos</td><td><b>${r.total_fotos ?? '—'}</b> · anaquel ${r.fotos_anaquel ?? 0}, acciones ${r.fotos_acciones ?? 0}, fachada ${r.fotos_fachada ?? 0}</td></tr>`;
+            html += `<tr><td>Con GPS en EXIF</td><td>${r.fotos_con_gps_exif ?? 0} de ${r.total_fotos ?? 0}</td></tr>`;
+            html += `<tr><td>Con fecha en EXIF</td><td>${r.fotos_con_fecha_exif ?? 0}</td></tr>`;
+            html += `<tr><td>Dif. GPS foto ↔ auditoría</td><td>máx <b>${r.dist_gps_max_m ?? '—'}</b> m · prom ${r.dist_gps_promedio_m ?? '—'} m</td></tr>`;
+            html += `<tr><td>Antigüedad máx. de una foto al enviar</td><td>${dur(r.antiguedad_foto_max_ms)}</td></tr>`;
+            html += `<tr><td>Tiempo seleccionando fotos</td><td>${dur(t.ms_seleccion_fotos)}</td></tr>`;
+            html += `<tr><td>De la última foto a «Enviar»</td><td>${dur(t.ms_desde_ultima_foto_a_envio)}</td></tr>`;
+            html += `<tr><td>Tiempo de subida de fotos</td><td>${dur(t.ms_subida)}</td></tr>`;
+            html += `<tr><td>Tiempo total de la auditoría</td><td>${dur(t.ms_total_auditoria)}</td></tr>`;
+            html += `<tr><td>GPS registrado en la auditoría</td><td>${(g.lat != null && g.lon != null) ? Number(g.lat).toFixed(5) + ', ' + Number(g.lon).toFixed(5) : '—'}</td></tr>`;
+            html += `<tr><td>Peso fotos (original → comprimido)</td><td>${kb(r.peso_original_total)} → ${kb(r.peso_comprimido_total)}</td></tr>`;
+            html += `<tr><td>Guardado</td><td>${ts(t.guardado_ts)}</td></tr>`;
+            html += '</tbody></table>';
+
+            if (Array.isArray(md.fotos) && md.fotos.length) {
+                html += '<h4 style="margin:6px 0;">Detalle por foto</h4><div style="overflow-x:auto;"><table class="tabla-inventario-mini"><thead><tr><th>Campo</th><th>Orig→Comp</th><th>Fecha EXIF</th><th>GPS EXIF</th><th>Dif. auditoría</th><th>Cámara</th></tr></thead><tbody>';
+                md.fotos.forEach(f => {
+                    const gps = f.exif_tiene_gps ? (Number(f.exif_lat).toFixed(5) + ', ' + Number(f.exif_lon).toFixed(5)) : 'No';
+                    html += `<tr>
+                        <td>${f.campo || '—'}</td>
+                        <td>${kb(f.peso_original)} → ${kb(f.peso_comprimido)}</td>
+                        <td>${f.exif_tomada_ts ? new Date(f.exif_tomada_ts).toLocaleString() : '—'}</td>
+                        <td>${gps}</td>
+                        <td>${(f.dist_vs_auditoria_m !== null && f.dist_vs_auditoria_m !== undefined) ? f.dist_vs_auditoria_m + ' m' : '—'}</td>
+                        <td>${f.exif_camara || '—'}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table></div>';
+            }
+
+            cuerpo.innerHTML = html;
+            document.getElementById('modal-metadatos').classList.remove('oculto');
         }
 
         /* ===== Contenedor de resultados de reportes (se muestra al inicio de la página) ===== */
