@@ -401,6 +401,57 @@
             });
         }
 
+        /* ===== Seguimiento de ubicación mientras se capturan fotos =====
+           Como Android no incrusta GPS en las fotos tomadas desde la web, la app guarda
+           su propia ubicación en el momento de agregar cada foto (sirve para cámara y galería). */
+        window.ultimaPosicion = null;   // { lat, lon, accuracy, ts }
+        window._watchGpsId = null;
+
+        function iniciarSeguimientoGps() {
+            if (!navigator.geolocation || window._watchGpsId !== null) return;
+            try {
+                window._watchGpsId = navigator.geolocation.watchPosition(
+                    (pos) => {
+                        window.ultimaPosicion = {
+                            lat: pos.coords.latitude,
+                            lon: pos.coords.longitude,
+                            accuracy: pos.coords.accuracy,
+                            ts: Date.now()
+                        };
+                    },
+                    (err) => { console.warn('watchPosition:', err && err.message); },
+                    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+                );
+            } catch (e) { console.warn('No se pudo iniciar el seguimiento GPS:', e); }
+        }
+
+        function detenerSeguimientoGps() {
+            if (navigator.geolocation && window._watchGpsId !== null) {
+                try { navigator.geolocation.clearWatch(window._watchGpsId); } catch (e) {}
+                window._watchGpsId = null;
+            }
+        }
+
+        // Ubicación actual del teléfono para sellar una foto: usa el último fix si es reciente,
+        // si no, pide uno rápido. Nunca rechaza.
+        function obtenerPosicionApp() {
+            return new Promise((resolve) => {
+                const up = window.ultimaPosicion;
+                if (up && (Date.now() - up.ts) < 20000) { resolve(up); return; }
+                if (!navigator.geolocation) { resolve(up || null); return; }
+                navigator.geolocation.getCurrentPosition(
+                    (pos) => resolve({
+                        lat: pos.coords.latitude,
+                        lon: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy,
+                        ts: Date.now()
+                    }),
+                    () => resolve(window.ultimaPosicion || null),
+                    { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 }
+                );
+            });
+        }
+
         // Lee los metadatos EXIF del archivo ORIGINAL (antes de comprimir a WebP, que borra el EXIF).
         // Nunca lanza: si no hay EXIF o falla la librería, devuelve el objeto con campos en null.
         async function extraerMetadatosFoto(file, campo, comprimida) {
@@ -413,18 +464,23 @@
                 exif = null;
             }
 
-            const lat = exif && typeof exif.latitude === 'number' ? exif.latitude : null;
-            const lon = exif && typeof exif.longitude === 'number' ? exif.longitude : null;
+            let lat = exif && Number.isFinite(exif.latitude) ? exif.latitude : null;
+            let lon = exif && Number.isFinite(exif.longitude) ? exif.longitude : null;
+
+            // Muchos móviles (cámara abierta desde la web) escriben un bloque GPS vacío en 0,0
+            // cuando la ubicación está apagada. Eso NO es GPS real: lo descartamos.
+            const gpsValido = lat !== null && lon !== null &&
+                (Math.abs(lat) > 0.0001 || Math.abs(lon) > 0.0001) &&
+                Math.abs(lat) <= 90 && Math.abs(lon) <= 180;
+            if (!gpsValido) { lat = null; lon = null; }
 
             let tomadaTs = null;
             if (exif && exif.DateTimeOriginal instanceof Date && !isNaN(exif.DateTimeOriginal)) {
                 tomadaTs = exif.DateTimeOriginal.getTime();
             }
 
-            let distAuditoria = null;
-            if (lat !== null && lon !== null && window.currentLat && window.currentLon) {
-                distAuditoria = Math.round(calcularDistanciaMetros(window.currentLat, window.currentLon, lat, lon));
-            }
+            // Sello de ubicación de la app en el momento de agregar la foto (funciona con cámara y galería).
+            const pos = await obtenerPosicionApp();
 
             return {
                 campo: campo,
@@ -439,7 +495,13 @@
                 exif_lon: lon,
                 exif_tiene_gps: (lat !== null && lon !== null),
                 exif_camara: exif ? ([exif.Make, exif.Model].filter(Boolean).join(' ').trim() || null) : null,
-                dist_vs_auditoria_m: distAuditoria
+                dist_vs_auditoria_m: null, // se calcula al guardar, con el GPS final de la auditoría
+                captura_lat: pos && Number.isFinite(pos.lat) ? pos.lat : null,
+                captura_lon: pos && Number.isFinite(pos.lon) ? pos.lon : null,
+                captura_precision_m: pos && Number.isFinite(pos.accuracy) ? Math.round(pos.accuracy) : null,
+                captura_ts: pos && pos.ts ? pos.ts : null,
+                captura_fix_antiguedad_ms: pos && pos.ts ? (Date.now() - pos.ts) : null,
+                dist_captura_vs_auditoria_m: null // se calcula al guardar
             };
         }
 
@@ -815,6 +877,7 @@
             document.getElementById('vista-inventario').classList.remove('oculto');
             document.getElementById('info-sucursal-activa').innerText = `Sucursal: ${window.nombreSucursalSeleccionada}`;
             window.tsEntradaInventario = Date.now();
+            iniciarSeguimientoGps();
 
             await cargarProductosInventario();
         }
@@ -822,6 +885,7 @@
         function regresarAVistaSucursal() {
             document.getElementById('vista-inventario').classList.add('oculto');
             document.getElementById('vista-sucursal').classList.remove('oculto');
+            detenerSeguimientoGps();
         }
 
         async function cargarProductosInventario() {
@@ -899,12 +963,33 @@
                 window.metaFotos.fachada || []
             );
             const tsGuardado = Date.now();
+
+            const auditoriaTieneGps = typeof window.currentLat === 'number' && typeof window.currentLon === 'number';
+
+            // Distancia de cada foto al GPS FINAL de la auditoría: por EXIF (si trae) y por el sello de la app.
+            todas.forEach(m => {
+                if (auditoriaTieneGps && m.exif_lat !== null && m.exif_lat !== undefined && m.exif_lon !== null && m.exif_lon !== undefined) {
+                    m.dist_vs_auditoria_m = Math.round(calcularDistanciaMetros(window.currentLat, window.currentLon, m.exif_lat, m.exif_lon));
+                } else {
+                    m.dist_vs_auditoria_m = null;
+                }
+                if (auditoriaTieneGps && m.captura_lat !== null && m.captura_lat !== undefined && m.captura_lon !== null && m.captura_lon !== undefined) {
+                    m.dist_captura_vs_auditoria_m = Math.round(calcularDistanciaMetros(window.currentLat, window.currentLon, m.captura_lat, m.captura_lon));
+                } else {
+                    m.dist_captura_vs_auditoria_m = null;
+                }
+            });
+
             const sel = todas.map(m => m.seleccionada_ts).filter(Boolean);
             const primeraSel = sel.length ? Math.min.apply(null, sel) : null;
             const ultimaSel = sel.length ? Math.max.apply(null, sel) : null;
             const conGps = todas.filter(m => m.exif_tiene_gps);
             const dists = conGps.map(m => m.dist_vs_auditoria_m).filter(v => v !== null && v !== undefined);
             const exifFechas = todas.map(m => m.exif_tomada_ts).filter(Boolean);
+
+            const conSello = todas.filter(m => m.captura_lat !== null && m.captura_lat !== undefined && m.captura_lon !== null && m.captura_lon !== undefined);
+            const distSello = conSello.map(m => m.dist_captura_vs_auditoria_m).filter(v => v !== null && v !== undefined);
+            const precSello = conSello.map(m => m.captura_precision_m).filter(v => v !== null && v !== undefined);
 
             return {
                 version: 1,
@@ -931,33 +1016,17 @@
                     fotos_con_fecha_exif: exifFechas.length,
                     dist_gps_max_m: dists.length ? Math.max.apply(null, dists) : null,
                     dist_gps_promedio_m: dists.length ? Math.round(dists.reduce((a, b) => a + b, 0) / dists.length) : null,
+                    fotos_con_sello_gps: conSello.length,
+                    dist_sello_max_m: distSello.length ? Math.max.apply(null, distSello) : null,
+                    dist_sello_promedio_m: distSello.length ? Math.round(distSello.reduce((a, b) => a + b, 0) / distSello.length) : null,
+                    precision_sello_peor_m: precSello.length ? Math.max.apply(null, precSello) : null,
+                    precision_sello_mejor_m: precSello.length ? Math.min.apply(null, precSello) : null,
                     antiguedad_foto_max_ms: exifFechas.length ? (tsGuardado - Math.min.apply(null, exifFechas)) : null,
                     peso_original_total: todas.reduce((a, m) => a + (m.peso_original || 0), 0),
                     peso_comprimido_total: todas.reduce((a, m) => a + (m.peso_comprimido || 0), 0)
                 },
                 fotos: todas
             };
-        }
-
-        // Texto del resumen que se muestra al auditor al cerrar la auditoría.
-        function textoResumenMetadatos(md) {
-            const r = md.resumen, t = md.tiempos;
-            const seg = ms => (ms === null || ms === undefined) ? '—' : (ms / 1000).toFixed(1) + ' s';
-            const min = ms => (ms === null || ms === undefined) ? '—' : (ms / 60000).toFixed(1) + ' min';
-            let txt = '✅ Visita, inventario y evidencias registradas.\n\n';
-            txt += `📸 Fotos: ${r.total_fotos} (anaquel ${r.fotos_anaquel}, acciones ${r.fotos_acciones}, fachada ${r.fotos_fachada})\n`;
-            txt += `🛰️ Con GPS en metadatos: ${r.fotos_con_gps_exif} / ${r.total_fotos}\n`;
-            if (r.dist_gps_max_m !== null) {
-                txt += `📍 Diferencia GPS foto vs auditoría: máx ${r.dist_gps_max_m} m · prom ${r.dist_gps_promedio_m} m\n`;
-            } else {
-                txt += `📍 Las fotos no traen GPS en sus metadatos (no se puede comparar la ubicación)\n`;
-            }
-            txt += `⏱️ Subida de fotos: ${seg(t.ms_subida)}\n`;
-            txt += `⏱️ Tiempo total de la auditoría: ${min(t.ms_total_auditoria)}\n`;
-            if (r.antiguedad_foto_max_ms !== null && r.antiguedad_foto_max_ms > 3600000) {
-                txt += `\n⚠️ Una foto fue tomada hace ${min(r.antiguedad_foto_max_ms)} — verifica que sea reciente.`;
-            }
-            return txt;
         }
 
         async function guardarVisitaEInventario() {
@@ -1024,10 +1093,11 @@
                 if (insertError) throw insertError;
 
                 mostrarProgreso("¡Visita guardada con éxito!", 100);
+                detenerSeguimientoGps();
 
                 setTimeout(() => {
                     ocultarProgreso();
-                    alert(textoResumenMetadatos(metadatosFotos));
+                    alert("✅ Visita, inventario y evidencias registradas.");
                     location.reload();
                 }, 500);
 

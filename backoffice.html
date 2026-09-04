@@ -1166,11 +1166,34 @@
             const ts = x => x ? new Date(x).toLocaleString() : '—';
             const kb = b => b ? Math.round(b / 1024) + ' KB' : '—';
 
+            // GPS real = coordenada finita y distinta de 0,0 (los móviles ponen 0,0 cuando la ubicación está apagada).
+            const gpsReal = f => Number.isFinite(f.exif_lat) && Number.isFinite(f.exif_lon)
+                && (Math.abs(f.exif_lat) > 0.0001 || Math.abs(f.exif_lon) > 0.0001)
+                && Math.abs(f.exif_lat) <= 90 && Math.abs(f.exif_lon) <= 180;
+            const fotos = Array.isArray(md.fotos) ? md.fotos : [];
+            const fotosGps = fotos.filter(gpsReal);
+            const distsReales = fotosGps.map(f => f.dist_vs_auditoria_m).filter(x => typeof x === 'number' && !isNaN(x));
+            const distMax = distsReales.length ? Math.max.apply(null, distsReales) : null;
+            const distProm = distsReales.length ? Math.round(distsReales.reduce((a, b) => a + b, 0) / distsReales.length) : null;
+            const totalFotos = fotos.length || r.total_fotos || 0;
+
+            // Sello de ubicación de la app (la que sí funciona con cámara y galería).
+            const selloOk = f => Number.isFinite(f.captura_lat) && Number.isFinite(f.captura_lon);
+            const fotosSello = fotos.filter(selloOk);
+            const distsSello = fotosSello.map(f => f.dist_captura_vs_auditoria_m).filter(x => typeof x === 'number' && !isNaN(x));
+            const selloMax = distsSello.length ? Math.max.apply(null, distsSello) : null;
+            const selloProm = distsSello.length ? Math.round(distsSello.reduce((a, b) => a + b, 0) / distsSello.length) : null;
+            const precs = fotosSello.map(f => f.captura_precision_m).filter(x => typeof x === 'number' && !isNaN(x));
+            const selloAlerta = selloMax !== null && selloMax > 300;
+
             let html = '<table class="tabla-inventario-mini" style="margin-bottom:16px;"><tbody>';
-            html += `<tr><td>Fotos</td><td><b>${r.total_fotos ?? '—'}</b> · anaquel ${r.fotos_anaquel ?? 0}, acciones ${r.fotos_acciones ?? 0}, fachada ${r.fotos_fachada ?? 0}</td></tr>`;
-            html += `<tr><td>Con GPS en EXIF</td><td>${r.fotos_con_gps_exif ?? 0} de ${r.total_fotos ?? 0}</td></tr>`;
+            html += `<tr><td>Fotos</td><td><b>${r.total_fotos ?? totalFotos}</b> · anaquel ${r.fotos_anaquel ?? 0}, acciones ${r.fotos_acciones ?? 0}, fachada ${r.fotos_fachada ?? 0}</td></tr>`;
+            html += `<tr><td><b>Con sello GPS de la app</b></td><td><b>${fotosSello.length}</b> de ${totalFotos}${fotosSello.length === 0 ? ' <span style="color:#94a3b8;">(el auditor no dio permiso de ubicación, o auditoría antigua)</span>' : ''}</td></tr>`;
+            html += `<tr${selloAlerta ? ' style="background:#fef2f2;"' : ''}><td><b>Dif. sello GPS ↔ auditoría</b></td><td>${distsSello.length ? ('máx <b style="' + (selloAlerta ? 'color:#b91c1c;' : '') + '">' + selloMax + '</b> m · prom ' + selloProm + ' m' + (selloAlerta ? ' ⚠️ foto lejos de la ubicación registrada' : '')) : '—'}</td></tr>`;
+            html += `<tr><td>Precisión del sello GPS</td><td>${precs.length ? ('mejor ' + Math.min.apply(null, precs) + ' m · peor ' + Math.max.apply(null, precs) + ' m') : '—'}</td></tr>`;
+            html += `<tr><td>Con GPS real en EXIF</td><td>${fotosGps.length} de ${totalFotos}${fotosGps.length === 0 ? ' <span style="color:#94a3b8;">(normal: la cámara web no lo incrusta)</span>' : ''}</td></tr>`;
+            html += `<tr><td>Dif. GPS EXIF ↔ auditoría</td><td>${distsReales.length ? ('máx <b>' + distMax + '</b> m · prom ' + distProm + ' m') : '—'}</td></tr>`;
             html += `<tr><td>Con fecha en EXIF</td><td>${r.fotos_con_fecha_exif ?? 0}</td></tr>`;
-            html += `<tr><td>Dif. GPS foto ↔ auditoría</td><td>máx <b>${r.dist_gps_max_m ?? '—'}</b> m · prom ${r.dist_gps_promedio_m ?? '—'} m</td></tr>`;
             html += `<tr><td>Antigüedad máx. de una foto al enviar</td><td>${dur(r.antiguedad_foto_max_ms)}</td></tr>`;
             html += `<tr><td>Tiempo seleccionando fotos</td><td>${dur(t.ms_seleccion_fotos)}</td></tr>`;
             html += `<tr><td>De la última foto a «Enviar»</td><td>${dur(t.ms_desde_ultima_foto_a_envio)}</td></tr>`;
@@ -1182,15 +1205,24 @@
             html += '</tbody></table>';
 
             if (Array.isArray(md.fotos) && md.fotos.length) {
-                html += '<h4 style="margin:6px 0;">Detalle por foto</h4><div style="overflow-x:auto;"><table class="tabla-inventario-mini"><thead><tr><th>Campo</th><th>Orig→Comp</th><th>Fecha EXIF</th><th>GPS EXIF</th><th>Dif. auditoría</th><th>Cámara</th></tr></thead><tbody>';
+                html += '<h4 style="margin:6px 0;">Detalle por foto</h4><div style="overflow-x:auto;"><table class="tabla-inventario-mini"><thead><tr><th>Campo</th><th>Peso</th><th>Sello GPS de la app (±prec)</th><th>Dif. auditoría</th><th>EXIF (fecha / GPS)</th><th>Cámara</th></tr></thead><tbody>';
                 md.fotos.forEach(f => {
-                    const gps = f.exif_tiene_gps ? (Number(f.exif_lat).toFixed(5) + ', ' + Number(f.exif_lon).toFixed(5)) : 'No';
+                    const tieneSello = selloOk(f);
+                    const sello = tieneSello
+                        ? (Number(f.captura_lat).toFixed(5) + ', ' + Number(f.captura_lon).toFixed(5) + (typeof f.captura_precision_m === 'number' ? ' <span style="color:#94a3b8;">±' + f.captura_precision_m + ' m</span>' : ''))
+                        : 'No';
+                    const difSello = (tieneSello && typeof f.dist_captura_vs_auditoria_m === 'number' && !isNaN(f.dist_captura_vs_auditoria_m))
+                        ? (f.dist_captura_vs_auditoria_m + ' m' + (f.dist_captura_vs_auditoria_m > 300 ? ' <span style="color:#b91c1c;">⚠️</span>' : ''))
+                        : '—';
+                    const tieneExifGps = gpsReal(f);
+                    const exifCol = (f.exif_tomada_ts ? new Date(f.exif_tomada_ts).toLocaleString() : '—')
+                        + (tieneExifGps ? '<br><span style="color:#94a3b8;">GPS ' + Number(f.exif_lat).toFixed(5) + ', ' + Number(f.exif_lon).toFixed(5) + '</span>' : '');
                     html += `<tr>
                         <td>${f.campo || '—'}</td>
                         <td>${kb(f.peso_original)} → ${kb(f.peso_comprimido)}</td>
-                        <td>${f.exif_tomada_ts ? new Date(f.exif_tomada_ts).toLocaleString() : '—'}</td>
-                        <td>${gps}</td>
-                        <td>${(f.dist_vs_auditoria_m !== null && f.dist_vs_auditoria_m !== undefined) ? f.dist_vs_auditoria_m + ' m' : '—'}</td>
+                        <td>${sello}</td>
+                        <td>${difSello}</td>
+                        <td>${exifCol}</td>
                         <td>${f.exif_camara || '—'}</td>
                     </tr>`;
                 });
