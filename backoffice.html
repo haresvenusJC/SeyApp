@@ -337,6 +337,16 @@
             overflow-y: auto;
             padding-right: 2px;
         }
+        .badge-cadena {
+            background: #f3e8ff;
+            color: #6b21a8;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            display: inline-block;
+            text-transform: uppercase;
+        }
 
         #modal-visor {
             position: fixed;
@@ -558,6 +568,64 @@
                 <button onclick="abrirReporteMapa()" style="background: #2563eb; width: 100%;">🗺️ Abrir mapa de ubicaciones</button>
             </div>
         </div>
+
+        <div class="submenu">
+            <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-sucursales')">
+                <span>🏬 Reporte por Sucursal</span>
+                <span class="submenu-caret cerrado" id="caret-sm-sucursales">▾</span>
+            </button>
+            <div class="submenu-body oculto" id="sm-sucursales">
+                <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Cuántas visitas tiene cada sucursal, con enlace a cada auditoría realizada. Filtros propios de este reporte.</p>
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Rango de fechas (opcional):</label>
+                <input type="date" id="suc-fecha-inicio" style="width: 100%; margin-bottom: 8px;">
+                <input type="date" id="suc-fecha-fin" style="width: 100%; margin-bottom: 10px;">
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cadena:</label>
+                <select id="suc-cadena" style="width: 100%; margin-bottom: 10px;">
+                    <option value="">Todas las cadenas</option>
+                </select>
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Ordenar por:</label>
+                <select id="suc-orden" style="width: 100%; margin-bottom: 10px;">
+                    <option value="visitas_desc">Más visitadas primero</option>
+                    <option value="visitas_asc">Menos visitadas primero</option>
+                    <option value="nombre">Nombre de sucursal (A-Z)</option>
+                    <option value="ultima_desc">Última visita más reciente</option>
+                </select>
+
+                <button onclick="generarReportePorSucursal()" style="background: #ea580c; width: 100%;">🏬 Generar reporte por sucursal</button>
+            </div>
+        </div>
+
+        <div class="submenu">
+            <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-pagos')">
+                <span>💰 Reporte de Pagos</span>
+                <span class="submenu-caret cerrado" id="caret-sm-pagos">▾</span>
+            </button>
+            <div class="submenu-body oculto" id="sm-pagos">
+                <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Calcula cuánto se debe pagar en un corte de fechas, según la tarifa por visita de cada cadena.</p>
+
+                <div style="background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; margin-bottom:12px;">
+                    <label style="font-weight: bold; color: #444; font-size: 0.85rem; display:block; margin-bottom:8px;">Tarifa por cadena ($ MXN / visita):</label>
+                    <div id="pago-tarifas-lista"><p style="color:#888; font-size:0.8rem;">Cargando cadenas…</p></div>
+                    <p id="pago-tarifas-fuente" style="font-size: 0.72rem; color: #888; margin: 6px 0 0;"></p>
+                    <button onclick="guardarTarifas()" style="background:#16a34a; width:100%; margin-top:8px; font-size:0.85rem; padding:8px;">💾 Guardar tarifas</button>
+                </div>
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Corte de fecha — Desde:</label>
+                <input type="date" id="pago-fecha-inicio" style="width: 100%; margin-bottom: 8px;">
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Corte de fecha — Hasta:</label>
+                <input type="date" id="pago-fecha-fin" style="width: 100%; margin-bottom: 10px;">
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Auditor (opcional):</label>
+                <select id="pago-usuario" style="width: 100%; margin-bottom: 10px;">
+                    <option value="">Todos los auditores</option>
+                </select>
+
+                <button onclick="generarReportePago()" style="background: #ca8a04; width: 100%;">💰 Generar corte de pago</button>
+            </div>
+        </div>
     </div>
 
     <!-- 2. CONTENEDOR PRINCIPAL DEL BACK OFFICE (Oculto al inicio) -->
@@ -673,6 +741,23 @@
         let cacheGlobalVisitas = [];
         let cacheGlobalProductos = [];
         let cacheGlobalSucursales = [];
+
+        // Mapa id de visita -> registro completo, alimentado por cualquier consulta a visitas_auditoria.
+        // Permite que botones de cualquier reporte (dashboard, tabla dinámica, por sucursal) abran
+        // evidencias/metadatos sin depender de a qué lista pertenecen.
+        window.mapaVisitasPorId = {};
+        function registrarVisitasEnMapa(lista) {
+            (lista || []).forEach(v => {
+                if (v && v.id !== undefined && v.id !== null) window.mapaVisitasPorId[v.id] = v;
+            });
+        }
+
+        /* ===== Tarifas por cadena (para el Reporte de Pagos) =====
+           Se leen/guardan en la tabla tarifas_cadena si existe; si no, usan valores por
+           defecto y se guardan en localStorage (nunca bloquean el resto de la app). */
+        const TARIFAS_DEFAULT = { 'BENAVIDES': 60, 'DEL AHORRO': 80, 'HEB': 100 };
+        window.cacheTarifas = {};
+        window.tarifasFuenteNube = false;
 
         let galeriaActualUrls = [];
         let galeriaIndiceActual = 0;
@@ -860,6 +945,9 @@
 
             await cargarCatalogosAuxiliares();
             await cargarDatosAnalitica();
+            await cargarTarifas();
+            renderizarInputsTarifas();
+            poblarUsuariosPago();
         }
 
         async function cargarCatalogosAuxiliares() {
@@ -877,6 +965,139 @@
             }
         }
 
+        // Lee las tarifas por cadena desde Supabase (tabla tarifas_cadena). Si no existe todavía,
+        // usa lo guardado en este navegador o los valores por defecto — nunca rompe la carga.
+        // Clasifica el error de Supabase para poder explicarle al admin qué hacer (tabla ausente vs. RLS vs. otro).
+        function clasificarErrorTarifas(err) {
+            const code = (err && err.code) || '';
+            const msg = ((err && err.message) || '').toLowerCase();
+            if (code === '42P01' || code === 'PGRST205' || code === 'PGRST106' || msg.includes('could not find') || msg.includes('does not exist')) {
+                return 'falta_tabla';
+            }
+            if (code === '42501' || code === 'PGRST301' || msg.includes('permission denied') || msg.includes('row-level security') || msg.includes('rls')) {
+                return 'permiso_rls';
+            }
+            return 'otro';
+        }
+
+        async function cargarTarifas() {
+            window.cacheTarifas = {};
+            window.tarifasFuenteNube = false;
+            window.tarifasUltimoError = null;
+            try {
+                const { data, error } = await supabaseClient.from('tarifas_cadena').select('*');
+                if (error) throw error;
+                (data || []).forEach(t => { window.cacheTarifas[t.cadena] = Number(t.tarifa) || 0; });
+                window.tarifasFuenteNube = true;
+            } catch (err) {
+                window.tarifasUltimoError = { tipo: clasificarErrorTarifas(err), code: err.code, message: err.message };
+                console.warn('No se pudo leer "tarifas_cadena":', window.tarifasUltimoError);
+                let local = null;
+                try { local = JSON.parse(localStorage.getItem('sey_tarifas_cadena') || 'null'); } catch (e) { local = null; }
+                window.cacheTarifas = local || Object.assign({}, TARIFAS_DEFAULT);
+            }
+            // Cualquier cadena que exista en sucursales pero no tenga tarifa configurada, arranca en su
+            // valor por defecto conocido (o 0 si es una cadena nueva) para que siempre se pueda editar.
+            const cadenasConocidas = [...new Set(cacheGlobalSucursales.map(s => s.cadena).filter(Boolean))];
+            cadenasConocidas.forEach(c => {
+                if (window.cacheTarifas[c] === undefined) window.cacheTarifas[c] = TARIFAS_DEFAULT[c] || 0;
+            });
+        }
+
+        // Dibuja un input editable por cada cadena conocida, en el submenú "Reporte de Pagos".
+        function renderizarInputsTarifas() {
+            const cont = document.getElementById('pago-tarifas-lista');
+            const fuenteEl = document.getElementById('pago-tarifas-fuente');
+            if (!cont) return;
+
+            const cadenas = [...new Set(cacheGlobalSucursales.map(s => s.cadena).filter(Boolean))].sort();
+            if (cadenas.length === 0) {
+                cont.innerHTML = '<p style="color:#888; font-size:0.8rem;">No hay cadenas registradas en "sucursales" todavía.</p>';
+            } else {
+                let html = '';
+                cadenas.forEach(c => {
+                    const val = window.cacheTarifas[c] !== undefined ? window.cacheTarifas[c] : 0;
+                    html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px;">
+                        <label style="font-size:0.85rem; color:#444;">${c}</label>
+                        <input type="number" min="0" step="0.01" class="input-tarifa-cadena" data-cadena="${c}" value="${val}" style="width:100px; padding:6px 8px; font-size:0.85rem; margin-top:0;">
+                    </div>`;
+                });
+                cont.innerHTML = html;
+            }
+
+            if (fuenteEl) {
+                if (window.tarifasFuenteNube) {
+                    fuenteEl.innerHTML = '☁️ Guardadas en Supabase (todos los admins ven estos valores).';
+                } else {
+                    const tipo = window.tarifasUltimoError ? window.tarifasUltimoError.tipo : 'falta_tabla';
+                    let detalle;
+                    if (tipo === 'permiso_rls') {
+                        detalle = 'La tabla existe, pero <b>RLS la está bloqueando</b> para el anon key. Ejecuta: <code>alter table tarifas_cadena disable row level security;</code> (o crea una policy que lo permita) y recarga la página.';
+                    } else if (tipo === 'falta_tabla') {
+                        detalle = 'Aún no existe la tabla <b>"tarifas_cadena"</b> en Supabase (o está en otro proyecto). Ejecuta la migración SQL y recarga la página.';
+                    } else {
+                        detalle = 'No se pudo conectar con la tabla "tarifas_cadena" (' + (window.tarifasUltimoError ? window.tarifasUltimoError.message : 'error desconocido') + '). Revisa la consola del navegador (F12) para más detalle.';
+                    }
+                    fuenteEl.innerHTML = '⚠️ Por ahora se guardan solo en este navegador. ' + detalle;
+                }
+            }
+        }
+
+        // Guarda las tarifas editadas. Intenta primero en Supabase; si la tabla no existe, cae a localStorage.
+        async function guardarTarifas() {
+            const inputs = document.querySelectorAll('.input-tarifa-cadena');
+            const nuevas = {};
+            inputs.forEach(inp => {
+                const cadena = inp.getAttribute('data-cadena');
+                const val = parseFloat(inp.value);
+                nuevas[cadena] = isNaN(val) ? 0 : val;
+            });
+
+            window.cacheTarifas = Object.assign({}, window.cacheTarifas, nuevas);
+
+            try {
+                const filas = Object.keys(nuevas).map(c => ({ cadena: c, tarifa: nuevas[c] }));
+                const { error } = await supabaseClient.from('tarifas_cadena').upsert(filas, { onConflict: 'cadena' });
+                if (error) throw error;
+                window.tarifasFuenteNube = true;
+                localStorage.removeItem('sey_tarifas_cadena');
+                alert('✅ Tarifas guardadas en la nube. Todos los administradores verán estos valores.');
+            } catch (err) {
+                const tipo = clasificarErrorTarifas(err);
+                window.tarifasUltimoError = { tipo: tipo, code: err.code, message: err.message };
+                console.warn('No se pudo guardar "tarifas_cadena" en Supabase, se guarda solo en este navegador:', window.tarifasUltimoError);
+                localStorage.setItem('sey_tarifas_cadena', JSON.stringify(window.cacheTarifas));
+
+                let motivo;
+                if (tipo === 'permiso_rls') {
+                    motivo = 'la tabla existe pero RLS está bloqueando el guardado (ejecuta: alter table tarifas_cadena disable row level security;).';
+                } else if (tipo === 'falta_tabla') {
+                    motivo = 'aún no existe la tabla "tarifas_cadena" en Supabase (o está en otro proyecto).';
+                } else {
+                    motivo = 'error: ' + err.message;
+                }
+                alert('⚠️ No se pudo guardar en la nube (' + motivo + ')\n\nLas tarifas se guardaron solo en este navegador por ahora.');
+            }
+
+            renderizarInputsTarifas();
+        }
+
+        // Lista de auditores para el filtro del corte de pago (valores distintos de "usuario").
+        async function poblarUsuariosPago() {
+            try {
+                const { data, error } = await supabaseClient.from('visitas_auditoria').select('usuario');
+                if (error) throw error;
+                const usuarios = [...new Set((data || []).map(v => v.usuario).filter(Boolean))].sort();
+                const sel = document.getElementById('pago-usuario');
+                if (!sel) return;
+                let html = '<option value="">Todos los auditores</option>';
+                usuarios.forEach(u => { html += `<option value="${u}">${u}</option>`; });
+                sel.innerHTML = html;
+            } catch (err) {
+                console.warn('No se pudo cargar la lista de auditores para el corte de pago:', err.message);
+            }
+        }
+
         function poblarSelectsCadenasYSucursales() {
             const cadenasUnicas = [...new Set(cacheGlobalSucursales.map(s => s.cadena).filter(Boolean))].sort();
             let cadenaOptions = '<option value="">Todas las cadenas</option>';
@@ -884,6 +1105,8 @@
 
             document.getElementById('filtro-cadena').innerHTML = cadenaOptions;
             document.getElementById('sidebar-cadena').innerHTML = cadenaOptions;
+            const elSucCadena = document.getElementById('suc-cadena');
+            if (elSucCadena) elSucCadena.innerHTML = cadenaOptions;
 
             poblarSelectSucursalesGlobal();
             poblarSelectSucursalesSidebar();
@@ -940,6 +1163,7 @@
                 if (error) throw error;
 
                 cacheGlobalVisitas = data || [];
+                registrarVisitasEnMapa(cacheGlobalVisitas);
                 procesarYRenderizarMetricas();
             } catch (err) {
                 alert("Error al cargar los datos de auditoría: " + err.message);
@@ -1092,7 +1316,7 @@
             const mapaProductos = {};
             cacheGlobalProductos.forEach(p => { mapaProductos[p.id] = p.nombre_producto || p.codigo_barras || 'Producto'; });
 
-            visitas.forEach((v, idxVisita) => {
+            visitas.forEach((v) => {
                 const fechaFormateada = new Date(v.created_at).toLocaleString();
                 const sucInfo = mapaSucursales[v.sucursal_id] || {};
                 const nombreSucursal = sucInfo.nombre_sucursal || 'Sucursal Desconocida';
@@ -1116,7 +1340,7 @@
                 }
 
                 const tieneMeta = v.metadatos_fotos && typeof v.metadatos_fotos === 'object';
-                htmlEvidencias += `<br><button onclick="mostrarResumenMetadatos(${idxVisita})" class="btn-link-evidencia" style="background: ${tieneMeta ? '#0891b2' : '#94a3b8'}; margin-top: 4px;" title="Metadatos EXIF y tiempos de la auditoría">🛰️ Metadatos</button>`;
+                htmlEvidencias += `<br><button onclick="mostrarResumenMetadatos('${v.id}')" class="btn-link-evidencia" style="background: ${tieneMeta ? '#0891b2' : '#94a3b8'}; margin-top: 4px;" title="Metadatos EXIF y tiempos de la auditoría">🛰️ Metadatos</button>`;
 
                 let htmlInventarioDetalle = '<div class="inventario-scroll-box"><table class="tabla-inventario-mini"><thead><tr><th>Producto</th><th style="text-align:right; width:55px;">Cant.</th></tr></thead><tbody>';
                 
@@ -1148,8 +1372,8 @@
         }
 
         // Muestra el resumen de metadatos EXIF + tiempos de una auditoría (para revisar demoras y GPS).
-        function mostrarResumenMetadatos(visitaIndex) {
-            const v = cacheGlobalVisitas[visitaIndex];
+        function mostrarResumenMetadatos(visitaId) {
+            const v = window.mapaVisitasPorId[visitaId];
             const cuerpo = document.getElementById('modal-metadatos-cuerpo');
             const md = v && v.metadatos_fotos;
 
@@ -1257,6 +1481,310 @@
             window.location.href = 'reporte-mapa.html';
         }
 
+        /* ===== Reporte por Sucursal: conteo de visitas + enlace a cada auditoría ===== */
+        async function generarReportePorSucursal() {
+            try {
+                const fechaInicio = document.getElementById('suc-fecha-inicio').value;
+                const fechaFin = document.getElementById('suc-fecha-fin').value;
+                const cadenaFiltro = document.getElementById('suc-cadena').value;
+
+                let query = supabaseClient.from('visitas_auditoria').select('*').order('created_at', { ascending: false });
+
+                if (fechaInicio) query = query.gte('created_at', `${fechaInicio}T00:00:00`);
+                if (fechaFin) query = query.lte('created_at', `${fechaFin}T23:59:59`);
+
+                if (cadenaFiltro) {
+                    const idsSucursalesCadena = cacheGlobalSucursales.filter(s => s.cadena === cadenaFiltro).map(s => s.id);
+                    if (idsSucursalesCadena.length > 0) query = query.in('sucursal_id', idsSucursalesCadena);
+                    else query = query.eq('sucursal_id', -999);
+                }
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                registrarVisitasEnMapa(data || []);
+                construirReportePorSucursal(data || [], fechaInicio, fechaFin);
+                toggleSidebar();
+
+                setTimeout(() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }, 150);
+
+            } catch (err) {
+                alert("Error al generar el reporte por sucursal: " + err.message);
+                console.error(err);
+            }
+        }
+
+        function construirReportePorSucursal(visitas, fechaInicio, fechaFin) {
+            mostrarResultadoReporte();
+            const cont = document.getElementById('resultado-dinamico-container');
+            const orden = document.getElementById('suc-orden').value;
+
+            if (!visitas.length) {
+                cont.innerHTML = barraResultadoReporte('Reporte por Sucursal') +
+                    '<p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No se encontraron visitas con los filtros seleccionados en el menú lateral.</p>';
+                return;
+            }
+
+            const mapaSuc = {};
+            cacheGlobalSucursales.forEach(s => { mapaSuc[s.id] = s; });
+
+            const porSucursal = {};
+            visitas.forEach(v => {
+                const key = (v.sucursal_id === null || v.sucursal_id === undefined) ? '__sin_sucursal__' : v.sucursal_id;
+                if (!porSucursal[key]) porSucursal[key] = [];
+                porSucursal[key].push(v);
+            });
+
+            let filas = Object.keys(porSucursal).map(sid => {
+                const suc = mapaSuc[sid] || null;
+                const lista = porSucursal[sid].slice().sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                return {
+                    sucursalId: sid,
+                    nombre: suc ? suc.nombre_sucursal : 'Sin sucursal asignada',
+                    cadena: suc ? (suc.cadena || (suc.nombre_sucursal ? suc.nombre_sucursal.split(' - ')[0] : 'General')) : '—',
+                    visitas: lista,
+                    total: lista.length,
+                    ultima: lista.length ? lista[0].created_at : null
+                };
+            });
+
+            switch (orden) {
+                case 'visitas_asc': filas.sort((a, b) => a.total - b.total); break;
+                case 'nombre': filas.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')); break;
+                case 'ultima_desc': filas.sort((a, b) => new Date(b.ultima) - new Date(a.ultima)); break;
+                default: filas.sort((a, b) => b.total - a.total); // visitas_desc
+            }
+
+            const fmtF = s => { if (!s) return '—'; const p = s.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+            const idSeguro = sid => String(sid).replace(/[^a-zA-Z0-9_-]/g, '');
+
+            let html = barraResultadoReporte('Reporte por Sucursal');
+            html += `<p style="font-size: 0.85rem; color: #666; margin-top: 0;">
+                ${(fechaInicio && fechaFin) ? ('Rango ' + fmtF(fechaInicio) + ' – ' + fmtF(fechaFin) + '. ') : 'Histórico completo (sin filtro de fechas). '}
+                <b>${filas.length}</b> sucursal${filas.length === 1 ? '' : 'es'} con visitas · <b>${visitas.length}</b> visitas en total.
+                Haz clic en una sucursal para ver y abrir cada auditoría.
+            </p>`;
+
+            html += '<div class="dynamic-table-container"><table class="dynamic-pivot-table" id="tabla-exportable"><thead><tr>';
+            html += '<th>#</th><th>Sucursal</th><th>Cadena</th><th style="text-align:right;">Visitas</th><th>Última visita</th></tr></thead><tbody>';
+            filas.forEach((f, i) => {
+                const anchorId = 'suc-detalle-' + idSeguro(f.sucursalId);
+                html += `<tr>
+                    <td>${i + 1}</td>
+                    <td><a href="#${anchorId}" onclick="const d=document.getElementById('${anchorId}'); if(d) d.open = true;" style="color:#6b21a8; font-weight:bold; text-decoration:none;">${f.nombre}</a></td>
+                    <td><span class="badge-cadena">${f.cadena}</span></td>
+                    <td style="text-align:right; font-weight:bold; color:#6b21a8;">${f.total}</td>
+                    <td>${f.ultima ? new Date(f.ultima).toLocaleString() : '—'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+
+            html += '<h4 style="margin:18px 0 8px;">Auditorías por sucursal</h4>';
+            filas.forEach(f => {
+                const anchorId = 'suc-detalle-' + idSeguro(f.sucursalId);
+                html += `<details id="${anchorId}" style="border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px; overflow:hidden;">
+                    <summary style="cursor:pointer; padding:10px 14px; background:#f8f9fa; font-weight:bold; color:#6b21a8;">
+                        ${f.nombre} <span class="badge-cadena" style="margin-left:6px;">${f.cadena}</span>
+                        <span style="float:right; font-weight:normal; color:#666; font-size:0.85rem;">${f.total} visita${f.total === 1 ? '' : 's'}</span>
+                    </summary>
+                    <div style="padding:4px 14px 12px; overflow-x:auto;">
+                        <table class="tabla-inventario-mini" style="width:100%;">
+                            <thead><tr><th>Fecha / Hora</th><th>Auditor</th><th>Comentarios</th><th>Auditoría</th></tr></thead>
+                            <tbody>`;
+
+                f.visitas.forEach(v => {
+                    let botones = '';
+                    const urlsAnaquel = procesarUrlsEvidencia(v.fotos_anaquel, 'anaquel-evidencias');
+                    if (urlsAnaquel.length > 0) {
+                        const j = JSON.stringify(urlsAnaquel).replace(/"/g, '&quot;');
+                        botones += `<button onclick="abrirGaleriaModal('${j}', '📸 Evidencias de Anaquel (${urlsAnaquel.length})')" class="btn-link-evidencia" style="font-size:0.75rem; padding:4px 8px;">📸 (${urlsAnaquel.length})</button> `;
+                    }
+                    const urlsAcciones = procesarUrlsEvidencia(v.fotos_acciones, 'acciones-mejoras');
+                    if (urlsAcciones.length > 0) {
+                        const j = JSON.stringify(urlsAcciones).replace(/"/g, '&quot;');
+                        botones += `<button onclick="abrirGaleriaModal('${j}', '✅ Acciones de Mejora (${urlsAcciones.length})')" class="btn-link-evidencia btn-link-accion" style="font-size:0.75rem; padding:4px 8px;">✅ (${urlsAcciones.length})</button> `;
+                    }
+                    if (urlsAnaquel.length === 0 && urlsAcciones.length === 0) {
+                        botones += '<span style="color:#888; font-size:0.75rem;">Sin fotos</span> ';
+                    }
+                    const tieneMeta = v.metadatos_fotos && typeof v.metadatos_fotos === 'object';
+                    botones += `<button onclick="mostrarResumenMetadatos('${v.id}')" class="btn-link-evidencia" style="background:${tieneMeta ? '#0891b2' : '#94a3b8'}; font-size:0.75rem; padding:4px 8px;" title="Metadatos EXIF y tiempos">🛰️</button>`;
+
+                    html += `<tr>
+                        <td style="white-space:nowrap;">${new Date(v.created_at).toLocaleString()}</td>
+                        <td><b>${v.usuario || 'Anónimo'}</b></td>
+                        <td style="max-width:260px;">${v.comentarios || 'Sin comentarios'}</td>
+                        <td style="white-space:nowrap;">${botones}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table></div></details>';
+            });
+
+            cont.innerHTML = html;
+        }
+
+        /* ===== Reporte de Pagos: corte de fechas x tarifa por cadena ===== */
+        async function generarReportePago() {
+            try {
+                const fechaInicio = document.getElementById('pago-fecha-inicio').value;
+                const fechaFin = document.getElementById('pago-fecha-fin').value;
+                const usuarioFiltro = document.getElementById('pago-usuario').value;
+
+                if (!fechaInicio || !fechaFin) {
+                    alert('Selecciona el rango de fechas del corte (Desde y Hasta).');
+                    return;
+                }
+
+                let query = supabaseClient.from('visitas_auditoria').select('*').order('created_at', { ascending: true });
+                query = query.gte('created_at', `${fechaInicio}T00:00:00`).lte('created_at', `${fechaFin}T23:59:59`);
+                if (usuarioFiltro) query = query.eq('usuario', usuarioFiltro);
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                registrarVisitasEnMapa(data || []);
+                construirReportePago(data || [], fechaInicio, fechaFin, usuarioFiltro);
+                toggleSidebar();
+
+                setTimeout(() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }, 150);
+
+            } catch (err) {
+                alert('Error al generar el corte de pago: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        function construirReportePago(visitas, fechaInicio, fechaFin, usuarioFiltro) {
+            mostrarResultadoReporte();
+            const cont = document.getElementById('resultado-dinamico-container');
+
+            if (!visitas.length) {
+                cont.innerHTML = barraResultadoReporte('💰 Corte de Pago') +
+                    '<p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No hay visitas registradas en ese rango de fechas.</p>';
+                return;
+            }
+
+            const mapaSuc = {};
+            cacheGlobalSucursales.forEach(s => { mapaSuc[s.id] = s; });
+
+            // Cada visita: a qué sucursal/cadena pertenece y cuánto vale según la tarifa configurada.
+            const enriquecidas = visitas.map(v => {
+                const suc = mapaSuc[v.sucursal_id] || null;
+                const cadena = suc ? (suc.cadena || 'SIN CADENA') : 'SIN SUCURSAL';
+                const tarifa = window.cacheTarifas[cadena] !== undefined ? window.cacheTarifas[cadena] : 0;
+                return { visita: v, sucursal: suc, cadena, tarifa };
+            });
+
+            const totalGeneral = enriquecidas.reduce((a, e) => a + e.tarifa, 0);
+            const cadenasSinTarifa = [...new Set(enriquecidas.filter(e => !e.tarifa).map(e => e.cadena))];
+
+            const porAuditor = {};
+            enriquecidas.forEach(e => {
+                const u = e.visita.usuario || 'Anónimo';
+                if (!porAuditor[u]) porAuditor[u] = [];
+                porAuditor[u].push(e);
+            });
+
+            const filasAuditor = Object.keys(porAuditor).map(u => {
+                const lista = porAuditor[u].slice().sort((a, b) => new Date(a.visita.created_at) - new Date(b.visita.created_at));
+                const total = lista.reduce((a, e) => a + e.tarifa, 0);
+                const porCadena = {};
+                lista.forEach(e => { porCadena[e.cadena] = (porCadena[e.cadena] || 0) + 1; });
+                return { usuario: u, lista, total, visitas: lista.length, porCadena };
+            }).sort((a, b) => b.total - a.total);
+
+            const fmtMoney = n => '$' + Number(n).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const fmtF = s => { if (!s) return '—'; const p = s.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+            const idSeguro = s => String(s).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+            let html = barraResultadoReporte('💰 Corte de Pago');
+            html += `<p style="font-size: 0.85rem; color: #666; margin-top: 0;">
+                Corte <b>${fmtF(fechaInicio)} – ${fmtF(fechaFin)}</b>${usuarioFiltro ? ' · Auditor: <b>' + usuarioFiltro + '</b>' : ''} ·
+                <b>${visitas.length}</b> visita${visitas.length === 1 ? '' : 's'}
+            </p>`;
+
+            if (cadenasSinTarifa.length) {
+                html += `<p style="background:#fef2f2; color:#b91c1c; padding:8px 12px; border-radius:6px; font-size:0.82rem; margin-bottom:14px;">
+                    ⚠️ Sin tarifa configurada (se calculan en $0.00): <b>${cadenasSinTarifa.join(', ')}</b>. Configúralas en «💰 Reporte de Pagos» del menú y vuelve a generar el corte.
+                </p>`;
+            }
+
+            html += `<div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+                <div class="kpi-card" style="flex:1; min-width:170px;"><h4>Total a pagar</h4><p class="value" style="color:#16a34a;">${fmtMoney(totalGeneral)}</p></div>
+                <div class="kpi-card" style="flex:1; min-width:170px;"><h4>Visitas en el corte</h4><p class="value">${visitas.length}</p></div>
+                <div class="kpi-card" style="flex:1; min-width:170px;"><h4>Auditores</h4><p class="value">${filasAuditor.length}</p></div>
+            </div>`;
+
+            html += '<h4 style="margin:6px 0 8px;">Resumen por auditor</h4>';
+            html += '<div class="dynamic-table-container"><table class="dynamic-pivot-table" id="tabla-exportable"><thead><tr>';
+            html += '<th>Auditor</th><th>Desglose por cadena</th><th style="text-align:right;">Visitas</th><th style="text-align:right;">Total a pagar</th></tr></thead><tbody>';
+            filasAuditor.forEach(f => {
+                const desglose = Object.keys(f.porCadena).sort().map(c => `${c}: ${f.porCadena[c]} × ${fmtMoney(window.cacheTarifas[c] || 0)}`).join(' · ');
+                const anchorId = 'pago-detalle-' + idSeguro(f.usuario);
+                html += `<tr>
+                    <td><a href="#${anchorId}" onclick="const d=document.getElementById('${anchorId}'); if(d) d.open = true;" style="color:#6b21a8; font-weight:bold; text-decoration:none;">${f.usuario}</a></td>
+                    <td style="font-size:0.8rem; color:#555;">${desglose}</td>
+                    <td style="text-align:right;">${f.visitas}</td>
+                    <td style="text-align:right; font-weight:bold; color:#16a34a;">${fmtMoney(f.total)}</td>
+                </tr>`;
+            });
+            html += `<tr style="background:#6b21a8; color:#fff; font-weight:bold;">
+                <td colspan="3" style="text-align:right;">TOTAL DEL CORTE</td>
+                <td style="text-align:right;">${fmtMoney(totalGeneral)}</td>
+            </tr>`;
+            html += '</tbody></table></div>';
+
+            html += '<h4 style="margin:18px 0 8px;">Detalle de visitas por auditor (con enlace a la auditoría)</h4>';
+            filasAuditor.forEach(f => {
+                const anchorId = 'pago-detalle-' + idSeguro(f.usuario);
+                html += `<details id="${anchorId}" style="border:1px solid #e2e8f0; border-radius:8px; margin-bottom:10px; overflow:hidden;">
+                    <summary style="cursor:pointer; padding:10px 14px; background:#f8f9fa; font-weight:bold; color:#6b21a8;">
+                        ${f.usuario}
+                        <span style="float:right; font-weight:normal; color:#16a34a; font-size:0.9rem;">${fmtMoney(f.total)} · ${f.visitas} visita${f.visitas === 1 ? '' : 's'}</span>
+                    </summary>
+                    <div style="padding:4px 14px 12px; overflow-x:auto;">
+                        <table class="tabla-inventario-mini" style="width:100%;">
+                            <thead><tr><th>Fecha</th><th>Sucursal</th><th>Cadena</th><th style="text-align:right;">Tarifa</th><th>Auditoría</th></tr></thead>
+                            <tbody>`;
+
+                f.lista.forEach(e => {
+                    const v = e.visita;
+                    let botones = '';
+                    const urlsAnaquel = procesarUrlsEvidencia(v.fotos_anaquel, 'anaquel-evidencias');
+                    if (urlsAnaquel.length > 0) {
+                        const j = JSON.stringify(urlsAnaquel).replace(/"/g, '&quot;');
+                        botones += `<button onclick="abrirGaleriaModal('${j}', '📸 Evidencias de Anaquel (${urlsAnaquel.length})')" class="btn-link-evidencia" style="font-size:0.72rem; padding:3px 7px;">📸</button> `;
+                    }
+                    const urlsAcciones = procesarUrlsEvidencia(v.fotos_acciones, 'acciones-mejoras');
+                    if (urlsAcciones.length > 0) {
+                        const j = JSON.stringify(urlsAcciones).replace(/"/g, '&quot;');
+                        botones += `<button onclick="abrirGaleriaModal('${j}', '✅ Acciones de Mejora (${urlsAcciones.length})')" class="btn-link-evidencia btn-link-accion" style="font-size:0.72rem; padding:3px 7px;">✅</button> `;
+                    }
+                    if (urlsAnaquel.length === 0 && urlsAcciones.length === 0) {
+                        botones += '<span style="color:#888; font-size:0.72rem;">Sin fotos</span> ';
+                    }
+                    botones += `<button onclick="mostrarResumenMetadatos('${v.id}')" class="btn-link-evidencia" style="background:#0891b2; font-size:0.72rem; padding:3px 7px;" title="Metadatos EXIF y tiempos">🛰️</button>`;
+
+                    html += `<tr>
+                        <td style="white-space:nowrap;">${new Date(v.created_at).toLocaleString()}</td>
+                        <td>${e.sucursal ? e.sucursal.nombre_sucursal : 'Sin sucursal'}</td>
+                        <td><span class="badge-cadena">${e.cadena}</span></td>
+                        <td style="text-align:right; font-weight:bold;">${fmtMoney(e.tarifa)}</td>
+                        <td style="white-space:nowrap;">${botones}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table></div></details>';
+            });
+
+            cont.innerHTML = html;
+        }
+
         async function generarReporteDinamicoSidebar() {
             try {
                 const fechaInicio = document.getElementById('sidebar-fecha-inicio').value;
@@ -1279,6 +1807,8 @@
 
                 const { data, error } = await query;
                 if (error) throw error;
+
+                registrarVisitasEnMapa(data || []);
 
                 const modoReporte = document.getElementById('sidebar-modo').value;
                 if (modoReporte === 'dinamica') {
