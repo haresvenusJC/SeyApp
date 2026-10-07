@@ -930,7 +930,16 @@
             galeriaActualUrls = [];
         }
 
+        // Pide a Supabase que sincronice las ventas del ERP. No bloquea la app: la funcion
+        // decide sola si toca ir al ERP (limite de frecuencia del lado del servidor).
+        function sincronizarVentasErp() {
+            try {
+                supabaseClient.functions.invoke('sync-ventas-erp').catch(() => {});
+            } catch (e) { /* la sincronizacion es opcional */ }
+        }
+
         async function inicializarBackOffice() {
+            sincronizarVentasErp();
             const hoy = new Date();
             const hace7Dias = new Date();
             hace7Dias.setDate(hoy.getDate() - 6); // 7 días exactos (hoy incluido), sin repetir día de la semana

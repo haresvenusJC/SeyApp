@@ -326,6 +326,14 @@
         
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+        // Pide a Supabase que sincronice las ventas del ERP. No bloquea la app: la funcion
+        // decide sola si toca ir al ERP (limite de frecuencia del lado del servidor).
+        function sincronizarVentasErp() {
+            try {
+                supabaseClient.functions.invoke('sync-ventas-erp').catch(() => {});
+            } catch (e) { /* la sincronizacion es opcional */ }
+        }
+
         window.currentLat = null;
         window.currentLon = null;
         window.sucursalSeleccionadaId = null;
@@ -577,6 +585,7 @@
             });
 
             function showApp(username) {
+                sincronizarVentasErp();
                 loginScreen.style.display = "none";
                 appContent.classList.remove("oculto");
                 welcomeMsg.textContent = `👤 Hola, ${username}`;

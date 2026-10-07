@@ -27,3 +27,15 @@ alter table existencias_erp enable row level security;
 -- Para que backoffice.html pueda LEER con la anon key, descomenta:
 -- create policy "lectura ventas" on ventas_erp for select using (true);
 -- create policy "lectura existencias" on existencias_erp for select using (true);
+
+-- Control de la sincronizacion disparada desde la app (limita cuantas veces se llama al ERP)
+create table if not exists erp_sync_estado (
+    id             int primary key check (id = 1),
+    ultimo_intento timestamptz not null default 'epoch',
+    ultimo_ok      timestamptz,
+    ultimo_error   text
+);
+insert into erp_sync_estado (id) values (1) on conflict do nothing;
+alter table erp_sync_estado enable row level security;
+-- La app (anon) puede leer el estado para mostrar "ultima sincronizacion":
+create policy "lectura estado sync" on erp_sync_estado for select using (true);
