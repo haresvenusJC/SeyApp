@@ -1198,6 +1198,7 @@
             const nombresMeses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
             let conteoMeses = {};
             const conteoPorFecha = {};
+
             visitas.forEach(v => {
                 const fecha = new Date(v.created_at);
                 if (!isNaN(fecha)) {
