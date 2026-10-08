@@ -38,6 +38,16 @@ function filasDeHtml(html: string): string[][] {
   return filas;
 }
 
+// El reporte sale como texto plano (TIPOREPORTE=4), separado por ";" (TXTCampos)
+// con saltos de linea CRLF (TXTLinea = chr(13).chr(10)).
+function filasDeCsv(texto: string): string[][] {
+  const limpio = texto.replace(/^﻿/, "");
+  return limpio
+    .split(/\r\n|\r|\n/)
+    .filter((l) => l.trim().length > 0)
+    .map((l) => l.split(";").map((c) => c.replace(/&amp;/g, "&").replace(/&quot;/g, '"').trim()));
+}
+
 function fechaYYYYMMDD(d: Date) {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -134,7 +144,7 @@ Deno.serve(async (req) => {
     PARAM2: fechaYYYYMMDD(hoy),
     PARAM3: "", PARAM4: "", PARAM5: "", PARAM6: "", PARAM7: "", PARAM8: "", PARAM9: "", PARAM10: "",
     ORDENA1: "", ORDENA2: "", ORDENA3: "",
-    TIPOREPORTE: "2", // salida en tabla/lista
+    TIPOREPORTE: "4", // salida en texto plano (CSV), la unica que trae los datos en el cuerpo de la respuesta
     LATINFUNNEL: "1",
     TXTCampos: ";", TXTLinea: "chr(13).chr(10)", TXTTitulos: "1", TXTTotales: "1", TXTDecimal: ".",
   });
@@ -155,7 +165,7 @@ Deno.serve(async (req) => {
 
   let datos;
   try {
-    datos = interpretar(filasDeHtml(htmlGo));
+    datos = interpretar(filasDeCsv(htmlGo));
   } catch (e) {
     if (!dry) await db.from("erp_sync_estado_docs").update({ ultimo_error: String(e) }).eq("id", 1);
     return json({ ok: false, error: String(e) }, 502);
