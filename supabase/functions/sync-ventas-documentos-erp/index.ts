@@ -151,7 +151,11 @@ Deno.serve(async (req) => {
 
   const respGo = await fetch(urlEnvio, {
     method: "POST",
-    headers: { ...headersBase, "Content-Type": "application/x-www-form-urlencoded" },
+    headers: {
+      ...headersBase,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Referer: Deno.env.get("ERP_URL_DOCUMENTOS")!,
+    },
     body: cuerpo.toString(),
     redirect: "manual",
     signal: AbortSignal.timeout(30_000),
@@ -167,7 +171,7 @@ Deno.serve(async (req) => {
   try {
     datos = interpretar(filasDeCsv(htmlGo));
   } catch (e) {
-    const crudo = htmlGo.slice(0, 1500);
+    const crudo = htmlGo.slice(0, 4000);
     if (!dry) await db.from("erp_sync_estado_docs").update({ ultimo_error: String(e) }).eq("id", 1);
     return json({ ok: false, error: String(e), crudo }, 502);
   }
