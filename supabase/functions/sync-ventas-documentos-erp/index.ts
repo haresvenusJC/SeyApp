@@ -38,16 +38,6 @@ function filasDeHtml(html: string): string[][] {
   return filas;
 }
 
-// El reporte sale como texto plano (TIPOREPORTE=4), separado por ";" (TXTCampos)
-// con saltos de linea CRLF (TXTLinea = chr(13).chr(10)).
-function filasDeCsv(texto: string): string[][] {
-  const limpio = texto.replace(/^﻿/, "");
-  return limpio
-    .split(/\r\n|\r|\n/)
-    .filter((l) => l.trim().length > 0)
-    .map((l) => l.split(";").map((c) => c.replace(/&amp;/g, "&").replace(/&quot;/g, '"').trim()));
-}
-
 function fechaYYYYMMDD(d: Date) {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -68,7 +58,7 @@ function interpretar(filas: string[][]) {
     iNombre = col("NOMBRE"), iNotas = col("NOTAS"), iUsuario = col("USUARIO"),
     iSubtotal = col("SUBTOTAL"), iIva = col("IVA"), iTotal = col("TOTAL");
 
-  const titulo = filas.slice(0, iEnc).map((f) => f[0]).find((t) => t && !/emision|fecha/i.test(t)) ?? "";
+  const titulo = "VENTAS ALMACEN 500";
 
   const docs: any[] = [];
   for (const f of filas.slice(iEnc + 1)) {
@@ -171,11 +161,8 @@ Deno.serve(async (req) => {
   try {
     datos = interpretar(filasDeHtml(htmlGo));
   } catch (e) {
-    const idxTabla = htmlGo.search(/<table/i);
-    const crudo = idxTabla >= 0 ? htmlGo.slice(idxTabla, idxTabla + 3000) : htmlGo.slice(0, 2000);
-    const totalTr = (htmlGo.match(/<tr/gi) ?? []).length;
     if (!dry) await db.from("erp_sync_estado_docs").update({ ultimo_error: String(e) }).eq("id", 1);
-    return json({ ok: false, error: String(e), crudo, debug: { idxTabla, totalTr, largo: htmlGo.length } }, 502);
+    return json({ ok: false, error: String(e) }, 502);
   }
 
   const resumen = { ok: true, titulo: datos.titulo, desde: fechaYYYYMMDD(desde), hasta: fechaYYYYMMDD(hoy), documentos: datos.docs.length };
