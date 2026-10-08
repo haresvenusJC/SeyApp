@@ -13,7 +13,11 @@
 //   ERP_COOKIE          la misma cookie de sesion que usa sync-ventas-erp
 //   SYNC_KEY            la misma clave, solo para el modo de prueba (?dry=1)
 //   SYNC_MIN_MINUTOS    (opcional, default 60)
-//   SYNC_DIAS_ATRAS     (opcional, default 730 = ~24 meses) cuantos dias atras pedir
+//   SYNC_DIAS_ATRAS     (opcional, default 730 = ~24 meses) solo se usa la PRIMERA vez
+//                        (cuando erp_sync_estado_docs.ultimo_ok todavia es nulo)
+//   SYNC_DIAS_MARGEN    (opcional, default 5) en sincronizaciones siguientes, cuantos
+//                        dias antes de la ultima sincronizacion exitosa volver a pedir
+//                        (para capturar documentos corregidos con fecha retroactiva)
 // SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY ya vienen incluidos en Supabase.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -100,6 +104,11 @@ Deno.serve(async (req) => {
     if (!turno?.length) return json({ ok: true, omitido: true });
   }
 
+  // Si ya sincronizo con exito antes, solo pedimos desde esa fecha (con un
+  // margen de unos dias por si el ERP corrige documentos recientes). Si nunca
+  // ha sincronizado, traemos el historico completo (SYNC_DIAS_ATRAS).
+  const { data: estado } = await db.from("erp_sync_estado_docs").select("ultimo_ok").eq("id", 1).single();
+
   const cookie = Deno.env.get("ERP_COOKIE")!;
   const headersBase = { Cookie: cookie, "User-Agent": UA };
 
@@ -125,10 +134,16 @@ Deno.serve(async (req) => {
     return json({ ok: false, error: String(e) }, 502);
   }
 
-  // Paso 2: POST con el rango de fechas (por defecto, ultimos ~24 meses)
-  const diasAtras = Number(Deno.env.get("SYNC_DIAS_ATRAS") ?? 730);
+  // Paso 2: POST con el rango de fechas
   const hoy = new Date();
-  const desde = new Date(Date.now() - diasAtras * 86_400_000);
+  let desde: Date;
+  if (estado?.ultimo_ok) {
+    const diasMargen = Number(Deno.env.get("SYNC_DIAS_MARGEN") ?? 5);
+    desde = new Date(new Date(estado.ultimo_ok).getTime() - diasMargen * 86_400_000);
+  } else {
+    const diasAtras = Number(Deno.env.get("SYNC_DIAS_ATRAS") ?? 730);
+    desde = new Date(Date.now() - diasAtras * 86_400_000);
+  }
   const cuerpo = new URLSearchParams({
     PARAM1: fechaYYYYMMDD(desde),
     PARAM2: fechaYYYYMMDD(hoy),
