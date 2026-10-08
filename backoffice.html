@@ -653,6 +653,29 @@
                 <button onclick="generarReporteVentasErp()" style="background: #0891b2; width: 100%;">📦 Generar reporte de ventas</button>
             </div>
         </div>
+
+        <div class="submenu">
+            <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-docs')">
+                <span>🧾 Ventas Documentos (Folios)</span>
+                <span class="submenu-caret cerrado" id="caret-sm-docs">▾</span>
+            </button>
+            <div class="submenu-body oculto" id="sm-docs">
+                <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Ventas en pesos por documento/folio, con cliente, sincronizadas desde el ERP.</p>
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cliente (nombre, opcional):</label>
+                <input type="text" id="docs-cliente" placeholder="Ej. Farmacia…" style="width: 100%; margin-bottom: 8px;">
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Folio (opcional):</label>
+                <input type="number" id="docs-folio" placeholder="Ej. 12345" style="width: 100%; margin-bottom: 8px;">
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Desde (fecha):</label>
+                <input type="date" id="docs-fecha-inicio" style="width: 100%; margin-bottom: 8px;">
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Hasta (fecha):</label>
+                <input type="date" id="docs-fecha-fin" style="width: 100%; margin-bottom: 10px;">
+
+                <button onclick="generarReporteVentasDocumentos()" style="background: #7c3aed; width: 100%;">🧾 Generar reporte de documentos</button>
+            </div>
+        </div>
     </div>
 
     <!-- 2. CONTENEDOR PRINCIPAL DEL BACK OFFICE (Oculto al inicio) -->
@@ -965,8 +988,15 @@
             } catch (e) { /* la sincronizacion es opcional */ }
         }
 
+        function sincronizarVentasDocumentosErp() {
+            try {
+                supabaseClient.functions.invoke('sync-ventas-documentos-erp').catch(() => {});
+            } catch (e) { /* la sincronizacion es opcional */ }
+        }
+
         async function inicializarBackOffice() {
             sincronizarVentasErp();
+            sincronizarVentasDocumentosErp();
             const hoy = new Date();
             const hace7Dias = new Date();
             hace7Dias.setDate(hoy.getDate() - 6); // 7 días exactos (hoy incluido), sin repetir día de la semana
@@ -1957,6 +1987,82 @@
             html += '<tr class="fila-total-pivot"><td>TOTAL</td><td></td>';
             meses.forEach(m => { html += `<td style="text-align:right;">${totalesPorMes[m].toLocaleString('es-MX')}</td>`; });
             html += `<td style="text-align:right;">${totalGeneral.toLocaleString('es-MX')}</td><td></td></tr>`;
+            html += '</tbody></table></div>';
+
+            cont.innerHTML = html;
+        }
+
+        /* ===== Ventas Documentos (Folios): lee ventas_documentos_erp (ya sincronizada en Supabase) ===== */
+        async function generarReporteVentasDocumentos() {
+            try {
+                const cliente = document.getElementById('docs-cliente').value.trim();
+                const folio = document.getElementById('docs-folio').value.trim();
+                const fechaInicio = document.getElementById('docs-fecha-inicio').value;
+                const fechaFin = document.getElementById('docs-fecha-fin').value;
+
+                let query = supabaseClient.from('ventas_documentos_erp').select('*').order('fecha', { ascending: false }).limit(5000);
+                if (folio) query = query.eq('id', Number(folio));
+                if (cliente) query = query.ilike('cliente_nombre', `%${cliente}%`);
+                if (fechaInicio) query = query.gte('fecha', fechaInicio);
+                if (fechaFin) query = query.lte('fecha', fechaFin);
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                construirReporteVentasDocumentos(data || [], { cliente, folio, fechaInicio, fechaFin });
+                toggleSidebar();
+
+                setTimeout(() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }, 150);
+
+            } catch (err) {
+                alert('Error al generar el reporte de ventas por documento: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        function construirReporteVentasDocumentos(docs, filtros) {
+            mostrarResultadoReporte();
+            const cont = document.getElementById('resultado-dinamico-container');
+
+            if (!docs.length) {
+                cont.innerHTML = barraResultadoReporte('🧾 Ventas Documentos (Folios)') +
+                    '<p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No hay documentos sincronizados con esos filtros todavía. La sincronización se dispara sola al iniciar sesión en la app (como máximo cada hora) — vuelve a intentar en un rato, o revisa que exista la tabla "ventas_documentos_erp".</p>';
+                return;
+            }
+
+            const totalSubtotal = docs.reduce((a, d) => a + Number(d.subtotal || 0), 0);
+            const totalIva = docs.reduce((a, d) => a + Number(d.iva || 0), 0);
+            const totalGeneral = docs.reduce((a, d) => a + Number(d.total || 0), 0);
+            const fmtMxn = n => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+
+            let html = barraResultadoReporte('🧾 Ventas Documentos (Folios)');
+            html += `<p style="font-size: 0.85rem; color: #666; margin-top: 0;">
+                ${filtros.cliente ? 'Cliente: <b>' + filtros.cliente + '</b> · ' : ''}
+                ${filtros.folio ? 'Folio: <b>' + filtros.folio + '</b> · ' : ''}
+                ${(filtros.fechaInicio || filtros.fechaFin) ? ('Rango ' + (filtros.fechaInicio || '…') + ' – ' + (filtros.fechaFin || '…') + '. ') : 'Histórico completo sincronizado. '}
+                <b>${docs.length}</b> documento${docs.length === 1 ? '' : 's'} · <b>${fmtMxn(totalGeneral)}</b> en total.
+                ${docs.length >= 5000 ? '<br><span style="color:#b45309;">⚠️ Se alcanzó el límite de 5,000 filas mostradas — acota el rango de fechas o el cliente para ver todo.</span>' : ''}
+            </p>`;
+
+            html += '<div class="dynamic-table-container"><table class="dynamic-pivot-table" id="tabla-exportable"><thead><tr>';
+            html += '<th>Folio</th><th>Fecha</th><th>Cliente</th><th>Notas</th><th>Usuario</th>';
+            html += '<th style="text-align:right;">Subtotal</th><th style="text-align:right;">IVA</th><th style="text-align:right;">Total</th></tr></thead><tbody>';
+
+            docs.forEach(d => {
+                html += `<tr><td>${d.id}</td><td>${d.fecha || ''}</td>`;
+                html += `<td>${d.cliente_nombre || d.cliente_codigo || '—'}</td>`;
+                html += `<td>${d.notas || ''}</td><td>${d.usuario || ''}</td>`;
+                html += `<td style="text-align:right;">${fmtMxn(Number(d.subtotal || 0))}</td>`;
+                html += `<td style="text-align:right;">${fmtMxn(Number(d.iva || 0))}</td>`;
+                html += `<td style="text-align:right; font-weight:bold; color:#6b21a8;">${fmtMxn(Number(d.total || 0))}</td></tr>`;
+            });
+
+            html += `<tr class="fila-total-pivot"><td colspan="5">TOTAL (${docs.length} documentos)</td>`;
+            html += `<td style="text-align:right;">${fmtMxn(totalSubtotal)}</td>`;
+            html += `<td style="text-align:right;">${fmtMxn(totalIva)}</td>`;
+            html += `<td style="text-align:right;">${fmtMxn(totalGeneral)}</td></tr>`;
             html += '</tbody></table></div>';
 
             cont.innerHTML = html;
