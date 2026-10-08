@@ -23,7 +23,8 @@ create table if not exists erp_sync_estado_docs (
     id             int primary key check (id = 1),
     ultimo_intento timestamptz not null default 'epoch',
     ultimo_ok      timestamptz,
-    ultimo_error   text
+    ultimo_error   text,
+    backfill_anio  int  -- anio que sigue por cargar en la carga historica (null = no hay una en curso)
 );
 insert into erp_sync_estado_docs (id) values (1) on conflict do nothing;
 alter table erp_sync_estado_docs enable row level security;
