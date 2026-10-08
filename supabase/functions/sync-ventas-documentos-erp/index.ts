@@ -46,6 +46,11 @@ function fechaYYYYMMDD(d: Date) {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function parseYYYYMMDD(s: string): Date {
+  const y = Number(s.slice(0, 4)), m = Number(s.slice(4, 6)) - 1, d = Number(s.slice(6, 8));
+  return new Date(y, m, d);
+}
+
 // Extrae del HTML de la pantalla de captura la URL de envio (<form ... action='SmartReport_GO.php?...'>)
 function extraerAccionFormulario(html: string): string {
   const m = html.match(/action=['"]([^'"]*SmartReport_GO\.php[^'"]*)['"]/i);
@@ -88,14 +93,21 @@ function interpretar(filas: string[][]) {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
-  const dry = new URL(req.url).searchParams.has("dry");
-  if (dry && req.headers.get("x-sync-key") !== Deno.env.get("SYNC_KEY")) {
+  const params = new URL(req.url).searchParams;
+  const dry = params.has("dry");
+  // Carga manual por rango de fechas (ej. para traer el historico por anio sin
+  // redeploy): ?desde=AAAAMMDD&hasta=AAAAMMDD, protegido con el mismo x-sync-key.
+  const desdeParam = params.get("desde");
+  const hastaParam = params.get("hasta");
+  const manual = !!(desdeParam || hastaParam);
+
+  if ((dry || manual) && req.headers.get("x-sync-key") !== Deno.env.get("SYNC_KEY")) {
     return json({ ok: false, error: "No autorizado" }, 401);
   }
 
   const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
-  if (!dry) {
+  if (!dry && !manual) {
     const minutos = Number(Deno.env.get("SYNC_MIN_MINUTOS") ?? 60);
     const limite = new Date(Date.now() - minutos * 60_000).toISOString();
     const { data: turno } = await db.from("erp_sync_estado_docs")
@@ -135,9 +147,12 @@ Deno.serve(async (req) => {
   }
 
   // Paso 2: POST con el rango de fechas
-  const hoy = new Date();
+  let hoy = new Date();
   let desde: Date;
-  if (estado?.ultimo_ok) {
+  if (manual) {
+    desde = desdeParam ? parseYYYYMMDD(desdeParam) : new Date(Date.now() - 730 * 86_400_000);
+    if (hastaParam) hoy = parseYYYYMMDD(hastaParam);
+  } else if (estado?.ultimo_ok) {
     const diasMargen = Number(Deno.env.get("SYNC_DIAS_MARGEN") ?? 5);
     desde = new Date(new Date(estado.ultimo_ok).getTime() - diasMargen * 86_400_000);
   } else {
