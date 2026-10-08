@@ -626,6 +626,33 @@
                 <button onclick="generarReportePago()" style="background: #ca8a04; width: 100%;">💰 Generar corte de pago</button>
             </div>
         </div>
+
+        <div class="submenu">
+            <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-erp')">
+                <span>📦 Ventas ERP</span>
+                <span class="submenu-caret cerrado" id="caret-sm-erp">▾</span>
+            </button>
+            <div class="submenu-body oculto" id="sm-erp">
+                <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Ventas mensuales y existencia, sincronizadas desde el ERP (se leen de Supabase, no en vivo del ERP).</p>
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cadena:</label>
+                <select id="erp-cadena" style="width: 100%; margin-bottom: 8px;" onchange="poblarProductosErp()">
+                    <option value="">Todas las cadenas</option>
+                </select>
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Producto (opcional):</label>
+                <select id="erp-producto" style="width: 100%; margin-bottom: 8px;">
+                    <option value="">Todos los productos</option>
+                </select>
+
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Desde (mes):</label>
+                <input type="month" id="erp-mes-inicio" style="width: 100%; margin-bottom: 8px;">
+                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Hasta (mes):</label>
+                <input type="month" id="erp-mes-fin" style="width: 100%; margin-bottom: 10px;">
+
+                <button onclick="generarReporteVentasErp()" style="background: #0891b2; width: 100%;">📦 Generar reporte de ventas</button>
+            </div>
+        </div>
     </div>
 
     <!-- 2. CONTENEDOR PRINCIPAL DEL BACK OFFICE (Oculto al inicio) -->
@@ -957,6 +984,7 @@
             await cargarTarifas();
             renderizarInputsTarifas();
             poblarUsuariosPago();
+            cargarCatalogoErp();
         }
 
         async function cargarCatalogosAuxiliares() {
@@ -1790,6 +1818,146 @@
 
                 html += '</tbody></table></div></details>';
             });
+
+            cont.innerHTML = html;
+        }
+
+        /* ===== Ventas ERP: lee ventas_erp / existencias_erp (ya sincronizadas en Supabase) ===== */
+        window.catalogoErp = [];
+
+        async function cargarCatalogoErp() {
+            try {
+                const { data, error } = await supabaseClient.from('ventas_erp').select('cadena, referencia, nombre');
+                if (error) throw error;
+                window.catalogoErp = data || [];
+                const cadenas = [...new Set(window.catalogoErp.map(r => r.cadena).filter(Boolean))].sort();
+                let opts = '<option value="">Todas las cadenas</option>';
+                cadenas.forEach(c => { opts += `<option value="${c}">${c}</option>`; });
+                const selCadena = document.getElementById('erp-cadena');
+                if (selCadena) selCadena.innerHTML = opts;
+                poblarProductosErp();
+            } catch (err) {
+                console.warn('No se pudo cargar el catálogo de "ventas_erp" (¿falta la tabla, o falta la policy de lectura?):', err.message);
+            }
+        }
+
+        function poblarProductosErp() {
+            const cadena = document.getElementById('erp-cadena')?.value || '';
+            const sel = document.getElementById('erp-producto');
+            if (!sel) return;
+            const lista = (window.catalogoErp || []).filter(r => !cadena || r.cadena === cadena);
+            const vistos = new Set();
+            let opts = '<option value="">Todos los productos</option>';
+            lista.slice().sort((a, b) => (a.nombre || '').localeCompare(b.nombre || '', 'es'))
+                .forEach(r => {
+                    const key = r.cadena + '␟' + r.referencia;
+                    if (vistos.has(key)) return;
+                    vistos.add(key);
+                    opts += `<option value="${key}">${r.nombre || r.referencia}</option>`;
+                });
+            sel.innerHTML = opts;
+        }
+
+        async function generarReporteVentasErp() {
+            try {
+                const cadena = document.getElementById('erp-cadena').value;
+                const productoKey = document.getElementById('erp-producto').value;
+                const mesInicio = document.getElementById('erp-mes-inicio').value; // "YYYY-MM"
+                const mesFin = document.getElementById('erp-mes-fin').value;
+                const [prodCadena, prodRef] = productoKey ? productoKey.split('␟') : [null, null];
+
+                let query = supabaseClient.from('ventas_erp').select('*').order('periodo', { ascending: true });
+                if (prodRef) query = query.eq('cadena', prodCadena).eq('referencia', prodRef);
+                else if (cadena) query = query.eq('cadena', cadena);
+                if (mesInicio) query = query.gte('periodo', `${mesInicio}-01`);
+                if (mesFin) {
+                    const [y, m] = mesFin.split('-').map(Number);
+                    const ultimoDia = new Date(y, m, 0).toISOString().split('T')[0];
+                    query = query.lte('periodo', ultimoDia);
+                }
+
+                const { data: ventas, error } = await query;
+                if (error) throw error;
+
+                let queryExist = supabaseClient.from('existencias_erp').select('*').order('fecha', { ascending: false });
+                if (prodRef) queryExist = queryExist.eq('cadena', prodCadena).eq('referencia', prodRef);
+                else if (cadena) queryExist = queryExist.eq('cadena', cadena);
+                const { data: existencias } = await queryExist;
+
+                construirReporteVentasErp(ventas || [], existencias || [], cadena, mesInicio, mesFin);
+                toggleSidebar();
+
+                setTimeout(() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }, 150);
+
+            } catch (err) {
+                alert('Error al generar el reporte de ventas del ERP: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        function construirReporteVentasErp(ventas, existencias, cadenaFiltro, mesInicio, mesFin) {
+            mostrarResultadoReporte();
+            const cont = document.getElementById('resultado-dinamico-container');
+
+            if (!ventas.length) {
+                cont.innerHTML = barraResultadoReporte('📦 Ventas ERP') +
+                    '<p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No hay ventas sincronizadas con esos filtros todavía. La sincronización se dispara sola al iniciar sesión en la app (como máximo cada hora) — vuelve a intentar en un rato, o revisa que exista la tabla "ventas_erp".</p>';
+                return;
+            }
+
+            // Existencia mas reciente por producto
+            const existPorProd = {};
+            existencias.forEach(e => {
+                const key = e.cadena + '␟' + e.referencia;
+                if (!existPorProd[key] || e.fecha > existPorProd[key].fecha) existPorProd[key] = e;
+            });
+
+            const NOMBRES_MES_ERP = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+            const fmtMes = p => { const [y, m] = p.split('-'); return `${NOMBRES_MES_ERP[parseInt(m) - 1]} ${y}`; };
+            const meses = [...new Set(ventas.map(v => v.periodo))].sort();
+
+            const porProducto = {};
+            ventas.forEach(v => {
+                const key = v.cadena + '␟' + v.referencia;
+                if (!porProducto[key]) porProducto[key] = { cadena: v.cadena, referencia: v.referencia, nombre: v.nombre, porMes: {}, total: 0 };
+                porProducto[key].porMes[v.periodo] = (porProducto[key].porMes[v.periodo] || 0) + Number(v.cantidad || 0);
+                porProducto[key].total += Number(v.cantidad || 0);
+            });
+
+            const filas = Object.keys(porProducto).map(k => porProducto[k]).sort((a, b) => b.total - a.total);
+            const totalGeneral = filas.reduce((a, f) => a + f.total, 0);
+            const totalesPorMes = {};
+            meses.forEach(m => { totalesPorMes[m] = filas.reduce((a, f) => a + (f.porMes[m] || 0), 0); });
+
+            let html = barraResultadoReporte('📦 Ventas ERP');
+            html += `<p style="font-size: 0.85rem; color: #666; margin-top: 0;">
+                ${cadenaFiltro ? 'Cadena: <b>' + cadenaFiltro + '</b> · ' : ''}
+                ${(mesInicio || mesFin) ? ('Rango ' + (mesInicio ? fmtMes(mesInicio + '-01') : '…') + ' – ' + (mesFin ? fmtMes(mesFin + '-01') : '…') + '. ') : 'Histórico completo sincronizado. '}
+                <b>${filas.length}</b> producto${filas.length === 1 ? '' : 's'} · <b>${totalGeneral.toLocaleString('es-MX')}</b> piezas vendidas en total.
+            </p>`;
+
+            html += '<div class="dynamic-table-container"><table class="dynamic-pivot-table" id="tabla-exportable"><thead><tr>';
+            html += '<th>Producto</th><th>Cadena</th>';
+            meses.forEach(m => { html += `<th style="text-align:right;">${fmtMes(m)}</th>`; });
+            html += '<th style="text-align:right;">Total</th><th style="text-align:right;">Existencia</th></tr></thead><tbody>';
+
+            filas.forEach(f => {
+                const key = f.cadena + '␟' + f.referencia;
+                const ex = existPorProd[key];
+                html += `<tr><td><b>${f.nombre || f.referencia}</b><br><span style="font-size:0.75rem; color:#888;">${f.referencia}</span></td>`;
+                html += `<td><span class="badge-cadena">${f.cadena}</span></td>`;
+                meses.forEach(m => { html += `<td style="text-align:right;">${(f.porMes[m] || 0).toLocaleString('es-MX')}</td>`; });
+                html += `<td style="text-align:right; font-weight:bold; color:#6b21a8;">${f.total.toLocaleString('es-MX')}</td>`;
+                html += `<td style="text-align:right;">${ex ? Number(ex.existencia).toLocaleString('es-MX') : '—'}</td>`;
+                html += '</tr>';
+            });
+
+            html += '<tr class="fila-total-pivot"><td>TOTAL</td><td></td>';
+            meses.forEach(m => { html += `<td style="text-align:right;">${totalesPorMes[m].toLocaleString('es-MX')}</td>`; });
+            html += `<td style="text-align:right;">${totalGeneral.toLocaleString('es-MX')}</td><td></td></tr>`;
+            html += '</tbody></table></div>';
 
             cont.innerHTML = html;
         }
