@@ -167,8 +167,9 @@ Deno.serve(async (req) => {
   try {
     datos = interpretar(filasDeCsv(htmlGo));
   } catch (e) {
+    const crudo = htmlGo.slice(0, 1500);
     if (!dry) await db.from("erp_sync_estado_docs").update({ ultimo_error: String(e) }).eq("id", 1);
-    return json({ ok: false, error: String(e) }, 502);
+    return json({ ok: false, error: String(e), crudo }, 502);
   }
 
   const resumen = { ok: true, titulo: datos.titulo, desde: fechaYYYYMMDD(desde), hasta: fechaYYYYMMDD(hoy), documentos: datos.docs.length };
