@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
     PARAM2: fechaYYYYMMDD(hoy),
     PARAM3: "", PARAM4: "", PARAM5: "", PARAM6: "", PARAM7: "", PARAM8: "", PARAM9: "", PARAM10: "",
     ORDENA1: "", ORDENA2: "", ORDENA3: "",
-    TIPOREPORTE: "4", // salida en texto plano (CSV), la unica que trae los datos en el cuerpo de la respuesta
+    TIPOREPORTE: "1", // vista de impresion: trae una tabla <table> con los datos en el cuerpo HTML
     LATINFUNNEL: "1",
     TXTCampos: ";", TXTLinea: "chr(13).chr(10)", TXTTitulos: "1", TXTTotales: "1", TXTDecimal: ".",
   });
@@ -169,11 +169,13 @@ Deno.serve(async (req) => {
 
   let datos;
   try {
-    datos = interpretar(filasDeCsv(htmlGo));
+    datos = interpretar(filasDeHtml(htmlGo));
   } catch (e) {
-    const crudo = htmlGo.slice(0, 4000);
+    const idxTabla = htmlGo.search(/<table/i);
+    const crudo = idxTabla >= 0 ? htmlGo.slice(idxTabla, idxTabla + 3000) : htmlGo.slice(0, 2000);
+    const totalTr = (htmlGo.match(/<tr/gi) ?? []).length;
     if (!dry) await db.from("erp_sync_estado_docs").update({ ultimo_error: String(e) }).eq("id", 1);
-    return json({ ok: false, error: String(e), crudo }, 502);
+    return json({ ok: false, error: String(e), crudo, debug: { idxTabla, totalTr, largo: htmlGo.length } }, 502);
   }
 
   const resumen = { ok: true, titulo: datos.titulo, desde: fechaYYYYMMDD(desde), hasta: fechaYYYYMMDD(hoy), documentos: datos.docs.length };
