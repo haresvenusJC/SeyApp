@@ -741,15 +741,31 @@
                     </div>
                 </div>
 
+                <div class="submenu" style="margin-bottom: 10px;">
+                    <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-rent-cadenas')">
+                        <span>🏷️ Agrupar clientes en cadenas</span>
+                        <span class="submenu-caret cerrado" id="caret-sm-rent-cadenas">▾</span>
+                    </button>
+                    <div class="submenu-body oculto" id="sm-rent-cadenas">
+                        <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Agrupa varias razones sociales bajo una sola cadena (ej. todos los "Walmart", o todos los "Servicios en Puertos..." → Farmacias del Ahorro), para analizar venta y cargos globales por cadena.</p>
+                        <label style="font-weight: bold; color: #444; font-size: 0.85rem; display: block; margin-bottom: 5px;">El nombre del cliente contiene:</label>
+                        <input type="text" id="cadena-filtro-texto" placeholder="Ej. 'walmart'" style="width: 100%; margin-bottom: 8px;">
+                        <label style="font-weight: bold; color: #444; font-size: 0.85rem; display: block; margin-bottom: 5px;">Agrupar en la cadena:</label>
+                        <input type="text" id="cadena-nombre" placeholder="Ej. 'Walmart'" style="width: 100%; margin-bottom: 8px;">
+                        <button onclick="agruparClientesPorTexto()" style="background: #0891b2; width: 100%; margin-bottom: 10px;">🏷️ Agrupar coincidencias</button>
+                        <div id="cadena-lista" style="max-height: 260px; overflow-y: auto; font-size: 0.82rem;"></div>
+                    </div>
+                </div>
+
                 <div class="submenu">
                     <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-rent-analisis')">
                         <span>📊 Analizar rentabilidad</span>
                         <span class="submenu-caret cerrado" id="caret-sm-rent-analisis">▾</span>
                     </button>
                     <div class="submenu-body oculto" id="sm-rent-analisis">
-                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cliente:</label>
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cliente o cadena:</label>
                         <select id="rent-an-cliente" style="width: 100%; margin-bottom: 8px;">
-                            <option value="">Todos los clientes (suma)</option>
+                            <option value="">Todos (suma general)</option>
                         </select>
                         <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Desde (mes):</label>
                         <input type="month" id="rent-an-mes-inicio" style="width: 100%; margin-bottom: 8px;">
@@ -2227,6 +2243,9 @@
         /* ===== Rentabilidad: cargos por cliente/mes (captura manual) vs ventas (ventas_documentos_erp) ===== */
         window.catalogoCargosTipos = [];
 
+        window.listaClientesRentabilidad = [];
+        window.mapaClienteCadena = {};
+
         async function cargarCatalogoRentabilidad() {
             try {
                 const { data: tipos, error } = await supabaseClient.from('cargos_tipos').select('*').eq('activo', true).order('orden');
@@ -2243,19 +2262,120 @@
                 if (error) throw error;
                 const clientes = [...new Set((data || []).map(r => r.cliente_nombre).filter(Boolean))]
                     .sort((a, b) => a.localeCompare(b, 'es'));
+                window.listaClientesRentabilidad = clientes;
                 let optsCliente = '<option value="">Selecciona un cliente…</option>';
                 clientes.forEach(c => { optsCliente += `<option value="${c}">${c}</option>`; });
-                ['rent-cap-cliente', 'rent-dicc-cliente'].forEach(id => {
-                    const sel = document.getElementById(id);
-                    if (sel) sel.innerHTML = optsCliente;
-                });
-                const selAn = document.getElementById('rent-an-cliente');
-                if (selAn) selAn.innerHTML = '<option value="">Todos los clientes (suma)</option>' + clientes.map(c => `<option value="${c}">${c}</option>`).join('');
+                const selDicc = document.getElementById('rent-dicc-cliente');
+                if (selDicc) selDicc.innerHTML = optsCliente;
             } catch (err) {
                 console.warn('No se pudo cargar clientes para rentabilidad:', err.message);
             }
 
+            try {
+                const { data, error } = await supabaseClient.from('clientes_cadenas').select('cliente_nombre, cadena').limit(20000);
+                if (error) throw error;
+                window.mapaClienteCadena = {};
+                (data || []).forEach(r => { window.mapaClienteCadena[r.cliente_nombre] = r.cadena; });
+            } catch (err) {
+                console.warn('No se pudo cargar el catálogo de cadenas (¿falta correr erp/clientes_cadenas.sql?):', err.message);
+            }
+
+            poblarSelectClienteOCadena();
+            cargarGrupoCadenas();
             cargarDiccionarioAlias();
+        }
+
+        function poblarSelectClienteOCadena() {
+            const cadenas = [...new Set(Object.values(window.mapaClienteCadena))].sort((a, b) => a.localeCompare(b, 'es'));
+
+            const selAn = document.getElementById('rent-an-cliente');
+            if (selAn) {
+                let html = '<option value="">Todos (suma general)</option>';
+                if (cadenas.length) {
+                    html += '<optgroup label="Cadenas (venta y cargos globales)">';
+                    cadenas.forEach(c => { html += `<option value="cadena:${c}">🏷️ ${c}</option>`; });
+                    html += '</optgroup>';
+                }
+                html += '<optgroup label="Clientes individuales">';
+                window.listaClientesRentabilidad.forEach(c => { html += `<option value="cliente:${c}">${c}</option>`; });
+                html += '</optgroup>';
+                selAn.innerHTML = html;
+            }
+
+            const selCap = document.getElementById('rent-cap-cliente');
+            if (selCap) {
+                let html = '<option value="">Selecciona un cliente o cadena…</option>';
+                if (cadenas.length) {
+                    html += '<optgroup label="Cadenas (cargo a nivel cadena)">';
+                    cadenas.forEach(c => { html += `<option value="${c}">🏷️ ${c}</option>`; });
+                    html += '</optgroup>';
+                }
+                html += '<optgroup label="Clientes individuales">';
+                window.listaClientesRentabilidad.forEach(c => { html += `<option value="${c}">${c}</option>`; });
+                html += '</optgroup>';
+                selCap.innerHTML = html;
+            }
+        }
+
+        /* ===== Agrupar clientes en cadenas (clientes_cadenas) ===== */
+        async function cargarGrupoCadenas() {
+            const cont = document.getElementById('cadena-lista');
+            if (!cont) return;
+            try {
+                const { data, error } = await supabaseClient.from('clientes_cadenas').select('*').order('cadena').limit(20000);
+                if (error) throw error;
+                if (!data || !data.length) { cont.innerHTML = '<p style="color:#888;">Sin cadenas agrupadas todavía.</p>'; return; }
+                const porCadena = {};
+                data.forEach(r => { (porCadena[r.cadena] ??= []).push(r.cliente_nombre); });
+                let html = '';
+                Object.keys(porCadena).sort((a, b) => a.localeCompare(b, 'es')).forEach(cadena => {
+                    html += `<div style="margin-bottom:8px;"><b>🏷️ ${cadena}</b> (${porCadena[cadena].length})</div>`;
+                    porCadena[cadena].forEach(cliente => {
+                        html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:3px 0 3px 10px; border-bottom:1px solid #f1f1f1;">
+                            <span>${cliente}</span>
+                            <button onclick="quitarClienteDeCadena('${cliente.replace(/'/g, "\\'")}')" style="background:#dc2626; padding:2px 7px; font-size:0.72rem;">✕</button>
+                        </div>`;
+                    });
+                });
+                cont.innerHTML = html;
+            } catch (err) {
+                cont.innerHTML = '<p style="color:#b91c1c;">Error al cargar cadenas: ' + err.message + '</p>';
+            }
+        }
+
+        async function agruparClientesPorTexto() {
+            try {
+                const texto = document.getElementById('cadena-filtro-texto').value.trim().toLowerCase();
+                const cadena = document.getElementById('cadena-nombre').value.trim();
+                if (!texto || !cadena) { alert('Escribe el texto a buscar y el nombre de la cadena.'); return; }
+
+                const coincidencias = window.listaClientesRentabilidad.filter(c => c.toLowerCase().includes(texto));
+                if (!coincidencias.length) { alert('Ningún cliente coincide con ese texto.'); return; }
+
+                if (!confirm(`Se agruparán ${coincidencias.length} cliente(s) bajo la cadena "${cadena}":\n\n${coincidencias.join('\n')}\n\n¿Continuar?`)) return;
+
+                const filas = coincidencias.map(c => ({ cliente_nombre: c, cadena }));
+                const { error } = await supabaseClient.from('clientes_cadenas').upsert(filas, { onConflict: 'cliente_nombre' });
+                if (error) throw error;
+
+                document.getElementById('cadena-filtro-texto').value = '';
+                document.getElementById('cadena-nombre').value = '';
+                await cargarCatalogoRentabilidad();
+                alert('Cadena actualizada.');
+            } catch (err) {
+                alert('Error al agrupar: ' + err.message);
+            }
+        }
+
+        async function quitarClienteDeCadena(clienteNombre) {
+            if (!confirm(`¿Quitar a "${clienteNombre}" de su cadena?`)) return;
+            try {
+                const { error } = await supabaseClient.from('clientes_cadenas').delete().eq('cliente_nombre', clienteNombre);
+                if (error) throw error;
+                await cargarCatalogoRentabilidad();
+            } catch (err) {
+                alert('Error al quitar: ' + err.message);
+            }
         }
 
         function renderTiposCargoCaptura() {
@@ -2378,12 +2498,25 @@
 
         async function generarAnalisisRentabilidad() {
             try {
-                const cliente = document.getElementById('rent-an-cliente').value;
+                const seleccion = document.getElementById('rent-an-cliente').value; // "" | "cliente:X" | "cadena:X"
                 const mesInicio = document.getElementById('rent-an-mes-inicio').value;
                 const mesFin = document.getElementById('rent-an-mes-fin').value;
 
-                let qVentas = supabaseClient.from('ventas_documentos_erp').select('fecha, total, cliente_nombre').limit(20000);
-                if (cliente) qVentas = qVentas.eq('cliente_nombre', cliente);
+                let etiqueta = '';
+                let listaClientes = null; // null = sin filtro de cliente (todos)
+                if (seleccion.startsWith('cadena:')) {
+                    const cadena = seleccion.slice('cadena:'.length);
+                    listaClientes = Object.keys(window.mapaClienteCadena).filter(c => window.mapaClienteCadena[c] === cadena);
+                    listaClientes.push(cadena); // por si algun cargo se capturo directo a nombre de la cadena
+                    etiqueta = `Cadena: 🏷️ ${cadena} (${listaClientes.length - 1} cliente${listaClientes.length - 1 === 1 ? '' : 's'})`;
+                } else if (seleccion.startsWith('cliente:')) {
+                    const cliente = seleccion.slice('cliente:'.length);
+                    listaClientes = [cliente];
+                    etiqueta = `Cliente: ${cliente}`;
+                }
+
+                let qVentas = supabaseClient.from('ventas_documentos_erp').select('*').order('fecha', { ascending: false }).limit(20000);
+                if (listaClientes) qVentas = qVentas.in('cliente_nombre', listaClientes);
                 if (mesInicio) qVentas = qVentas.gte('fecha', `${mesInicio}-01`);
                 if (mesFin) {
                     const [y, m] = mesFin.split('-').map(Number);
@@ -2394,13 +2527,13 @@
                 if (errV) throw errV;
 
                 let qCargos = supabaseClient.from('cargos_mensuales').select('*, cargos_tipos(nombre)').limit(20000);
-                if (cliente) qCargos = qCargos.eq('cliente_nombre', cliente);
+                if (listaClientes) qCargos = qCargos.in('cliente_nombre', listaClientes);
                 if (mesInicio) qCargos = qCargos.gte('periodo', `${mesInicio}-01`);
                 if (mesFin) qCargos = qCargos.lte('periodo', `${mesFin}-01`);
                 const { data: cargos, error: errC } = await qCargos;
                 if (errC) throw errC;
 
-                construirAnalisisRentabilidad(ventas || [], cargos || [], { cliente, mesInicio, mesFin });
+                construirAnalisisRentabilidad(ventas || [], cargos || [], { etiqueta });
                 toggleSidebar();
 
                 setTimeout(() => {
@@ -2422,7 +2555,9 @@
             ventas.forEach(v => {
                 const mes = (v.fecha || '').slice(0, 7);
                 if (!mes) return;
-                ventasPorMes[mes] = (ventasPorMes[mes] || 0) + Number(v.total || 0);
+                if (!ventasPorMes[mes]) ventasPorMes[mes] = { total: 0, docs: [] };
+                ventasPorMes[mes].total += Number(v.total || 0);
+                ventasPorMes[mes].docs.push(v);
             });
 
             const cargosPorMes = {};
@@ -2447,12 +2582,14 @@
 
             let html = barraResultadoReporte('💹 Análisis de Rentabilidad');
             html += `<p style="font-size: 0.85rem; color: #666; margin-top: 0;">
-                ${filtros.cliente ? 'Cliente: <b>' + filtros.cliente + '</b> · ' : 'Todos los clientes (suma). '}
+                ${filtros.etiqueta ? '<b>' + filtros.etiqueta + '</b> · ' : 'Todos (suma general). '}
                 <b>${meses.length}</b> mes${meses.length === 1 ? '' : 'es'} analizado${meses.length === 1 ? '' : 's'}.
             </p>`;
 
             meses.forEach(mes => {
-                const ventaMes = ventasPorMes[mes] || 0;
+                const mesId = mes.replace('-', '');
+                const ventaMes = ventasPorMes[mes]?.total || 0;
+                const docsMes = ventasPorMes[mes]?.docs || [];
                 const cargosMes = cargosPorMes[mes] || {};
                 const totalCargos = Object.values(cargosMes).reduce((a, b) => a + b, 0);
                 const rentabilidad = ventaMes - totalCargos;
@@ -2472,10 +2609,43 @@
                 html += `<tr style="border-top:1px solid #e2e8f0;"><td style="padding:6px 0; font-weight:bold;">Total cargos</td><td style="text-align:right; font-weight:bold;">${fmtMxn(totalCargos)}</td></tr>
                         <tr><td style="padding:6px 0; font-weight:bold; color:${colorRent};">Rentabilidad</td><td style="text-align:right; font-weight:bold; color:${colorRent};">${fmtMxn(rentabilidad)} ${margen !== null ? '(' + margen.toFixed(1) + '%)' : ''}</td></tr>
                     </table>
+
+                    <a href="#" onclick="toggleDetalleVentasMes(event, '${mesId}')" style="display:inline-block; margin-top:10px; font-size:0.82rem; color:#7c3aed; text-decoration:underline;">▸ Ver ${docsMes.length} documento${docsMes.length === 1 ? '' : 's'} de venta de este mes</a>
+                    <div id="detalle-ventas-mes-${mesId}" class="oculto"></div>
                 </div>`;
+
+                // Guardamos los documentos de este mes para armar el detalle solo cuando se pida (evita tablas gigantes de entrada).
+                (window.rentDocsPorMes ??= {})[mesId] = docsMes;
             });
 
             cont.innerHTML = html;
+        }
+
+        // Dentro de un bloque mensual de Rentabilidad, expande la lista de documentos
+        // de venta de ese mes (folio clicable -> reutiliza el detalle de productos).
+        function toggleDetalleVentasMes(ev, mesId) {
+            ev.preventDefault();
+            const cont = document.getElementById('detalle-ventas-mes-' + mesId);
+            if (!cont) return;
+
+            if (!cont.classList.contains('oculto') || cont.innerHTML) {
+                cont.classList.toggle('oculto');
+                return;
+            }
+
+            const docs = (window.rentDocsPorMes || {})[mesId] || [];
+            const fmtMxn = n => Number(n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+            let html = '<table style="width:100%; font-size:0.82rem; border-collapse:collapse; margin:8px 0;">';
+            html += '<thead><tr style="background:#f3e8ff;"><th style="text-align:left; padding:4px 6px;">Folio</th><th style="text-align:left; padding:4px 6px;">Fecha</th><th style="text-align:left; padding:4px 6px;">Cliente</th><th style="text-align:right; padding:4px 6px;">Total</th></tr></thead><tbody>';
+            docs.forEach(d => {
+                html += `<tr><td style="padding:4px 6px;"><a href="#" onclick="toggleDetallePartidas(event, ${d.id})" style="color:#7c3aed; font-weight:bold; text-decoration:underline; cursor:pointer;">${d.id}</a></td>`;
+                html += `<td style="padding:4px 6px;">${d.fecha || ''}</td><td style="padding:4px 6px;">${d.cliente_nombre || d.cliente_codigo || '—'}</td>`;
+                html += `<td style="text-align:right; padding:4px 6px; font-weight:bold;">${fmtMxn(d.total)}</td></tr>`;
+                html += `<tr id="fila-detalle-${d.id}" class="oculto"><td colspan="4" style="background:#faf5ff; padding:0 10px;"><div id="detalle-contenido-${d.id}"></div></td></tr>`;
+            });
+            html += '</tbody></table>';
+            cont.innerHTML = html;
+            cont.classList.remove('oculto');
         }
 
         async function generarReporteDinamicoSidebar() {
