@@ -2019,22 +2019,44 @@
             cont.innerHTML = html;
         }
 
-        /* ===== Ventas ERP: lee ventas_erp / existencias_erp (ya sincronizadas en Supabase) ===== */
+        /* ===== Ventas ERP: piezas vendidas por producto/mes, calculado de ventas_partidas_erp
+           (dinamico: cualquier rango de fechas, todos los clientes/cadenas). La existencia
+           (stock actual) sigue viniendo del sync fijo original (es la unica fuente posible). ===== */
         window.catalogoErp = [];
+        window.mapaClienteCadenaErp = {};
 
         async function cargarCatalogoErp() {
             try {
-                const { data, error } = await supabaseClient.from('ventas_erp').select('cadena, referencia, nombre');
+                const { data: mapa, error: errMapa } = await supabaseClient.from('clientes_cadenas').select('cliente_nombre, cadena').limit(20000);
+                if (errMapa) throw errMapa;
+                window.mapaClienteCadenaErp = {};
+                (mapa || []).forEach(r => { window.mapaClienteCadenaErp[r.cliente_nombre] = r.cadena; });
+            } catch (err) {
+                console.warn('No se pudo cargar la agrupación de cadenas (¿falta correr erp/clientes_cadenas.sql?):', err.message);
+            }
+
+            try {
+                const { data, error } = await supabaseClient.from('ventas_partidas_erp')
+                    .select('cliente_nombre, clave, descripcion').limit(50000);
                 if (error) throw error;
-                window.catalogoErp = data || [];
-                const cadenas = [...new Set(window.catalogoErp.map(r => r.cadena).filter(Boolean))].sort();
+                const vistos = new Set();
+                window.catalogoErp = [];
+                (data || []).forEach(r => {
+                    if (!r.clave) return;
+                    const cadena = window.mapaClienteCadenaErp[r.cliente_nombre] || r.cliente_nombre;
+                    const key = cadena + '␟' + r.clave;
+                    if (vistos.has(key)) return;
+                    vistos.add(key);
+                    window.catalogoErp.push({ cadena, referencia: r.clave, nombre: r.descripcion });
+                });
+                const cadenas = [...new Set(window.catalogoErp.map(r => r.cadena).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
                 let opts = '<option value="">Todas las cadenas</option>';
                 cadenas.forEach(c => { opts += `<option value="${c}">${c}</option>`; });
                 const selCadena = document.getElementById('erp-cadena');
                 if (selCadena) selCadena.innerHTML = opts;
                 poblarProductosErp();
             } catch (err) {
-                console.warn('No se pudo cargar el catálogo de "ventas_erp" (¿falta la tabla, o falta la policy de lectura?):', err.message);
+                console.warn('No se pudo cargar el catálogo de "ventas_partidas_erp" (¿falta la tabla, o falta la policy de lectura?):', err.message);
             }
         }
 
@@ -2063,25 +2085,29 @@
                 const mesFin = document.getElementById('erp-mes-fin').value;
                 const [prodCadena, prodRef] = productoKey ? productoKey.split('␟') : [null, null];
 
-                let query = supabaseClient.from('ventas_erp').select('*').order('periodo', { ascending: true });
-                if (prodRef) query = query.eq('cadena', prodCadena).eq('referencia', prodRef);
-                else if (cadena) query = query.eq('cadena', cadena);
-                if (mesInicio) query = query.gte('periodo', `${mesInicio}-01`);
+                const LIMITE = 50000;
+                let query = supabaseClient.from('ventas_partidas_erp')
+                    .select('cliente_nombre, clave, descripcion, fecha, salidas, entradas').limit(LIMITE);
+                if (prodRef) query = query.eq('clave', prodRef);
+                if (mesInicio) query = query.gte('fecha', `${mesInicio}-01`);
                 if (mesFin) {
                     const [y, m] = mesFin.split('-').map(Number);
                     const ultimoDia = new Date(y, m, 0).toISOString().split('T')[0];
-                    query = query.lte('periodo', ultimoDia);
+                    query = query.lte('fecha', ultimoDia);
                 }
 
-                const { data: ventas, error } = await query;
+                const { data: partidas, error } = await query;
                 if (error) throw error;
 
-                let queryExist = supabaseClient.from('existencias_erp').select('*').order('fecha', { ascending: false });
-                if (prodRef) queryExist = queryExist.eq('cadena', prodCadena).eq('referencia', prodRef);
-                else if (cadena) queryExist = queryExist.eq('cadena', cadena);
-                const { data: existencias } = await queryExist;
+                // La cadena es un agrupamiento calculado (clientes_cadenas), asi que se filtra aqui.
+                const filtroCadena = prodRef ? prodCadena : cadena;
+                const filtradas = filtroCadena
+                    ? (partidas || []).filter(p => (window.mapaClienteCadenaErp[p.cliente_nombre] || p.cliente_nombre) === filtroCadena)
+                    : (partidas || []);
 
-                construirReporteVentasErp(ventas || [], existencias || [], cadena, mesInicio, mesFin);
+                const { data: existencias } = await supabaseClient.from('existencias_erp').select('*').order('fecha', { ascending: false });
+
+                construirReporteVentasErp(filtradas, existencias || [], cadena, mesInicio, mesFin, (partidas || []).length >= LIMITE);
                 toggleSidebar();
 
                 setTimeout(() => {
@@ -2094,45 +2120,51 @@
             }
         }
 
-        function construirReporteVentasErp(ventas, existencias, cadenaFiltro, mesInicio, mesFin) {
+        function construirReporteVentasErp(partidas, existencias, cadenaFiltro, mesInicio, mesFin, truncado) {
             mostrarResultadoReporte();
             const cont = document.getElementById('resultado-dinamico-container');
 
-            if (!ventas.length) {
+            if (!partidas.length) {
                 cont.innerHTML = barraResultadoReporte('📦 Ventas ERP') +
-                    '<p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No hay ventas sincronizadas con esos filtros todavía. La sincronización se dispara sola al iniciar sesión en la app (como máximo cada hora) — vuelve a intentar en un rato, o revisa que exista la tabla "ventas_erp".</p>';
+                    '<p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No hay ventas sincronizadas con esos filtros todavía. La sincronización se dispara sola al iniciar sesión en la app (como máximo cada hora) — vuelve a intentar en un rato, o revisa que exista la tabla "ventas_partidas_erp".</p>';
                 return;
             }
 
-            // Existencia mas reciente por producto
+            // Existencia mas reciente por producto (el stock actual no se agrupa por cadena calculada,
+            // solo por referencia — viene del sync original, de alcance mas limitado).
             const existPorProd = {};
             existencias.forEach(e => {
-                const key = e.cadena + '␟' + e.referencia;
-                if (!existPorProd[key] || e.fecha > existPorProd[key].fecha) existPorProd[key] = e;
+                if (!existPorProd[e.referencia] || e.fecha > existPorProd[e.referencia].fecha) existPorProd[e.referencia] = e;
             });
 
             const NOMBRES_MES_ERP = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
             const fmtMes = p => { const [y, m] = p.split('-'); return `${NOMBRES_MES_ERP[parseInt(m) - 1]} ${y}`; };
-            const meses = [...new Set(ventas.map(v => v.periodo))].sort();
 
             const porProducto = {};
-            ventas.forEach(v => {
-                const key = v.cadena + '␟' + v.referencia;
-                if (!porProducto[key]) porProducto[key] = { cadena: v.cadena, referencia: v.referencia, nombre: v.nombre, porMes: {}, total: 0 };
-                porProducto[key].porMes[v.periodo] = (porProducto[key].porMes[v.periodo] || 0) + Number(v.cantidad || 0);
-                porProducto[key].total += Number(v.cantidad || 0);
+            partidas.forEach(p => {
+                if (!p.clave) return;
+                const cadena = window.mapaClienteCadenaErp[p.cliente_nombre] || p.cliente_nombre;
+                const mes = (p.fecha || '').slice(0, 7) + '-01';
+                const key = cadena + '␟' + p.clave;
+                if (!porProducto[key]) porProducto[key] = { cadena, referencia: p.clave, nombre: p.descripcion || '', porMes: {}, total: 0 };
+                if (p.descripcion && !porProducto[key].nombre) porProducto[key].nombre = p.descripcion;
+                const neto = Number(p.salidas || 0) - Number(p.entradas || 0);
+                porProducto[key].porMes[mes] = (porProducto[key].porMes[mes] || 0) + neto;
+                porProducto[key].total += neto;
             });
 
-            const filas = Object.keys(porProducto).map(k => porProducto[k]).sort((a, b) => b.total - a.total);
+            const meses = [...new Set(Object.values(porProducto).flatMap(f => Object.keys(f.porMes)))].sort();
+            const filas = Object.values(porProducto).sort((a, b) => b.total - a.total);
             const totalGeneral = filas.reduce((a, f) => a + f.total, 0);
             const totalesPorMes = {};
             meses.forEach(m => { totalesPorMes[m] = filas.reduce((a, f) => a + (f.porMes[m] || 0), 0); });
 
             let html = barraResultadoReporte('📦 Ventas ERP');
             html += `<p style="font-size: 0.85rem; color: #666; margin-top: 0;">
-                ${cadenaFiltro ? 'Cadena: <b>' + cadenaFiltro + '</b> · ' : ''}
+                ${cadenaFiltro ? 'Cadena: <b>' + cadenaFiltro + '</b> · ' : 'Todas las cadenas/clientes. '}
                 ${(mesInicio || mesFin) ? ('Rango ' + (mesInicio ? fmtMes(mesInicio + '-01') : '…') + ' – ' + (mesFin ? fmtMes(mesFin + '-01') : '…') + '. ') : 'Histórico completo sincronizado. '}
-                <b>${filas.length}</b> producto${filas.length === 1 ? '' : 's'} · <b>${totalGeneral.toLocaleString('es-MX')}</b> piezas vendidas en total.
+                <b>${filas.length}</b> producto${filas.length === 1 ? '' : 's'} · <b>${totalGeneral.toLocaleString('es-MX')}</b> piezas vendidas (netas de devoluciones) en total.
+                ${truncado ? '<br><span style="color:#b45309;">⚠️ Hay más datos de los que se muestran — acota el rango de fechas, la cadena o el producto para ver todo.</span>' : ''}
             </p>`;
 
             html += '<div class="dynamic-table-container"><table class="dynamic-pivot-table" id="tabla-exportable"><thead><tr>';
@@ -2141,8 +2173,7 @@
             html += '<th style="text-align:right;">Total</th><th style="text-align:right;">Existencia</th></tr></thead><tbody>';
 
             filas.forEach(f => {
-                const key = f.cadena + '␟' + f.referencia;
-                const ex = existPorProd[key];
+                const ex = existPorProd[f.referencia];
                 html += `<tr><td><b>${f.nombre || f.referencia}</b><br><span style="font-size:0.75rem; color:#888;">${f.referencia}</span></td>`;
                 html += `<td><span class="badge-cadena">${f.cadena}</span></td>`;
                 meses.forEach(m => { html += `<td style="text-align:right;">${(f.porMes[m] || 0).toLocaleString('es-MX')}</td>`; });
