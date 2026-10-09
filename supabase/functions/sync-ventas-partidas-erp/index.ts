@@ -76,19 +76,26 @@ function interpretar(filas: string[][]) {
 
   const titulo = "PARTIDAS HARES SIN TRES";
 
+  const contadorLinea = new Map<string, number>();
   const partidas: any[] = [];
   for (const f of filas.slice(iEnc + 1)) {
     const idTxt = (f[iId] ?? "").replace(/,/g, "").trim();
     if (!idTxt || !/^\d+$/.test(idTxt)) continue; // fila de totales / vacia
     const documentoTxt = (f[iDocumento] ?? idTxt).replace(/,/g, "").trim();
+    const documento = Number(documentoTxt || idTxt);
+    const clave = limpiarClave(f[iClave] ?? "");
+    const claveGrupo = `${documento}␟${clave}`;
+    const linea = (contadorLinea.get(claveGrupo) ?? 0) + 1;
+    contadorLinea.set(claveGrupo, linea);
     partidas.push({
-      documento: Number(documentoTxt || idTxt),
+      documento,
       tipo: f[iTipo]?.trim() || null,
       fecha: f[iFecha]?.trim() || null,
       almacen: f[iAlmacen]?.trim() || null,
       cliente_codigo: (f[iCliente] ?? "").replace(/,/g, "").trim() || null,
       cliente_nombre: f[iNombre]?.trim() || null,
-      clave: limpiarClave(f[iClave] ?? ""),
+      clave,
+      linea,
       descripcion: f[iDescripcion]?.trim() || null,
       costo: num(f[iCosto]),
       precio: num(f[iPrecio]),
@@ -168,7 +175,7 @@ async function sincronizarRango(db: SupabaseClient, desde: Date, hasta: Date, es
 
   for (let i = 0; i < datos.partidas.length; i += 500) {
     const { error } = await db.from("ventas_partidas_erp")
-      .upsert(datos.partidas.slice(i, i + 500), { onConflict: "documento,clave" });
+      .upsert(datos.partidas.slice(i, i + 500), { onConflict: "documento,clave,linea" });
     if (error) return { ok: false, error: error.message };
   }
   return { ok: true, partidas: datos.partidas.length, titulo: datos.titulo };

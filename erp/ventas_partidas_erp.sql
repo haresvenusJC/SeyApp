@@ -11,6 +11,7 @@ create table if not exists ventas_partidas_erp (
     cliente_codigo  text,
     cliente_nombre  text,
     clave           text,              -- codigo del producto
+    linea           int not null default 1,  -- distingue renglones repetidos del mismo producto en un documento
     descripcion     text,              -- descripcion del producto
     costo           numeric,
     precio          numeric,
@@ -23,7 +24,7 @@ create table if not exists ventas_partidas_erp (
     hora            text,
     reporte         text,
     importado_en    timestamptz not null default now(),
-    unique (documento, clave)
+    unique (documento, clave, linea)
 );
 alter table ventas_partidas_erp enable row level security;
 create policy "lectura ventas partidas" on ventas_partidas_erp for select using (true);
