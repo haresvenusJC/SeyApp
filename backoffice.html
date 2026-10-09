@@ -1672,8 +1672,10 @@
             cont.innerHTML = '<p style="color:#888; font-size:0.78rem; margin:8px 0;">Cargando detalle…</p>';
 
             try {
-                const { data, error } = await supabaseClient.from('ventas_partidas_erp')
-                    .select('*').eq('documento', documentoId).order('linea');
+                const [{ data, error }, { data: docData }] = await Promise.all([
+                    supabaseClient.from('ventas_partidas_erp').select('*').eq('documento', documentoId).order('linea'),
+                    supabaseClient.from('ventas_documentos_erp').select('subtotal, iva, total').eq('id', documentoId).single(),
+                ]);
                 if (error) throw error;
 
                 if (!data || !data.length) {
@@ -1682,8 +1684,9 @@
                 }
 
                 const fmtMxn = n => Number(n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+                const sumaPartidas = data.reduce((a, p) => a + Number(p.total || 0), 0);
                 let html = '<table style="width:100%; font-size:0.82rem; border-collapse:collapse; margin:8px 0;">';
-                html += '<thead><tr style="background:#f3e8ff;"><th style="text-align:left; padding:4px 6px;">Clave</th><th style="text-align:left; padding:4px 6px;">Descripción</th><th style="text-align:right; padding:4px 6px;">Salidas</th><th style="text-align:right; padding:4px 6px;">Entradas</th><th style="text-align:right; padding:4px 6px;">Precio</th><th style="text-align:right; padding:4px 6px;">Total</th></tr></thead><tbody>';
+                html += '<thead><tr style="background:#f3e8ff;"><th style="text-align:left; padding:4px 6px;">Clave</th><th style="text-align:left; padding:4px 6px;">Descripción</th><th style="text-align:right; padding:4px 6px;">Salidas</th><th style="text-align:right; padding:4px 6px;">Entradas</th><th style="text-align:right; padding:4px 6px;">Precio</th><th style="text-align:right; padding:4px 6px;">Total (sin IVA)</th></tr></thead><tbody>';
                 data.forEach(p => {
                     html += `<tr><td style="padding:4px 6px;">${p.clave || ''}</td><td style="padding:4px 6px;">${p.descripcion || ''}</td>`;
                     html += `<td style="text-align:right; padding:4px 6px;">${Number(p.salidas || 0).toLocaleString('es-MX')}</td>`;
@@ -1691,7 +1694,15 @@
                     html += `<td style="text-align:right; padding:4px 6px;">${fmtMxn(p.precio)}</td>`;
                     html += `<td style="text-align:right; padding:4px 6px; font-weight:bold;">${fmtMxn(p.total)}</td></tr>`;
                 });
+                html += `<tr style="border-top:1px solid #d8b4fe;"><td colspan="5" style="padding:4px 6px; text-align:right;">Subtotal (productos, sin IVA)</td><td style="text-align:right; padding:4px 6px; font-weight:bold;">${fmtMxn(sumaPartidas)}</td></tr>`;
+                if (docData) {
+                    html += `<tr><td colspan="5" style="padding:4px 6px; text-align:right; color:#666;">IVA (del documento)</td><td style="text-align:right; padding:4px 6px; color:#666;">${fmtMxn(docData.iva)}</td></tr>`;
+                    html += `<tr><td colspan="5" style="padding:4px 6px; text-align:right; font-weight:bold;">Total del documento</td><td style="text-align:right; padding:4px 6px; font-weight:bold; color:#6b21a8;">${fmtMxn(docData.total)}</td></tr>`;
+                }
                 html += '</tbody></table>';
+                if (docData && Math.abs(sumaPartidas - Number(docData.subtotal || 0)) > 1) {
+                    html += '<p style="color:#b45309; font-size:0.74rem; margin:0 0 8px;">⚠️ La suma de las partidas no coincide exactamente con el subtotal del documento — puede haber líneas sin sincronizar.</p>';
+                }
                 cont.innerHTML = html;
             } catch (err) {
                 cont.innerHTML = '<p style="color:#b91c1c; font-size:0.78rem;">Error al cargar el detalle: ' + err.message + '</p>';
