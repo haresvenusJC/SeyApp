@@ -613,7 +613,7 @@
                     <label style="font-weight: bold; color: #444; font-size: 0.85rem; display:block; margin-bottom:8px;">Tarifa por cadena ($ MXN / visita):</label>
                     <div id="pago-tarifas-lista"><p style="color:#888; font-size:0.8rem;">Cargando cadenas…</p></div>
                     <p id="pago-tarifas-fuente" style="font-size: 0.72rem; color: #888; margin: 6px 0 0;"></p>
-                    <button onclick="guardarTarifas()" style="background:#16a34a; width:100%; margin-top:8px; font-size:0.85rem; padding:8px;">💾 Guardar tarifas</button>
+                    <div id="pago-tarifas-botones" style="margin-top:8px;"></div>
                 </div>
 
                 <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Corte de fecha — Desde:</label>
@@ -1184,16 +1184,21 @@
             });
         }
 
-        // Dibuja un input editable por cada cadena conocida, en el submenú "Reporte de Pagos".
+        // Dibuja las tarifas por cadena, en el submenú "Reporte de Pagos": de entrada en modo
+        // solo-lectura (no pregunta cada vez que se abre), con un botón para editarlas si hace falta.
+        window.tarifasEditando = false;
+
         function renderizarInputsTarifas() {
             const cont = document.getElementById('pago-tarifas-lista');
             const fuenteEl = document.getElementById('pago-tarifas-fuente');
+            const botonesEl = document.getElementById('pago-tarifas-botones');
             if (!cont) return;
 
             const cadenas = [...new Set(cacheGlobalSucursales.map(s => s.cadena).filter(Boolean))].sort();
             if (cadenas.length === 0) {
                 cont.innerHTML = '<p style="color:#888; font-size:0.8rem;">No hay cadenas registradas en "sucursales" todavía.</p>';
-            } else {
+                if (botonesEl) botonesEl.innerHTML = '';
+            } else if (window.tarifasEditando) {
                 let html = '';
                 cadenas.forEach(c => {
                     const val = window.cacheTarifas[c] !== undefined ? window.cacheTarifas[c] : 0;
@@ -1203,6 +1208,24 @@
                     </div>`;
                 });
                 cont.innerHTML = html;
+                if (botonesEl) {
+                    botonesEl.innerHTML = `
+                        <button onclick="guardarTarifas()" style="background:#16a34a; width:100%; font-size:0.85rem; padding:8px;">💾 Guardar tarifas</button>
+                        <button onclick="cancelarEdicionTarifas()" style="background:#6c757d; width:100%; font-size:0.85rem; padding:8px; margin-top:6px;">Cancelar</button>`;
+                }
+            } else {
+                let html = '';
+                cadenas.forEach(c => {
+                    const val = window.cacheTarifas[c] !== undefined ? window.cacheTarifas[c] : 0;
+                    html += `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px; font-size:0.85rem;">
+                        <span style="color:#444;">${c}</span>
+                        <span style="font-weight:bold; color:#6b21a8;">$${Number(val).toLocaleString('es-MX')}</span>
+                    </div>`;
+                });
+                cont.innerHTML = html;
+                if (botonesEl) {
+                    botonesEl.innerHTML = '<button onclick="editarTarifas()" style="background:#0891b2; width:100%; font-size:0.85rem; padding:8px;">✏️ Modificar tarifas</button>';
+                }
             }
 
             if (fuenteEl) {
@@ -1259,6 +1282,17 @@
                 alert('⚠️ No se pudo guardar en la nube (' + motivo + ')\n\nLas tarifas se guardaron solo en este navegador por ahora.');
             }
 
+            window.tarifasEditando = false;
+            renderizarInputsTarifas();
+        }
+
+        function editarTarifas() {
+            window.tarifasEditando = true;
+            renderizarInputsTarifas();
+        }
+
+        function cancelarEdicionTarifas() {
+            window.tarifasEditando = false;
             renderizarInputsTarifas();
         }
 
