@@ -1637,6 +1637,52 @@
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
+        // Expande/colapsa, bajo cada folio del reporte "Ventas Documentos", el detalle
+        // de productos de ese documento (leido de ventas_partidas_erp, bajo demanda).
+        async function toggleDetallePartidas(ev, documentoId) {
+            ev.preventDefault();
+            const fila = document.getElementById('fila-detalle-' + documentoId);
+            if (!fila) return;
+
+            if (!fila.classList.contains('oculto')) {
+                fila.classList.add('oculto');
+                return;
+            }
+            fila.classList.remove('oculto');
+
+            const cont = document.getElementById('detalle-contenido-' + documentoId);
+            if (cont.dataset.cargado) return;
+            cont.dataset.cargado = '1';
+            cont.innerHTML = '<p style="color:#888; font-size:0.78rem; margin:8px 0;">Cargando detalle…</p>';
+
+            try {
+                const { data, error } = await supabaseClient.from('ventas_partidas_erp')
+                    .select('*').eq('documento', documentoId).order('linea');
+                if (error) throw error;
+
+                if (!data || !data.length) {
+                    cont.innerHTML = '<p style="color:#888; font-size:0.78rem; margin:8px 0;">No hay detalle de productos sincronizado para este folio.</p>';
+                    return;
+                }
+
+                const fmtMxn = n => Number(n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+                let html = '<table style="width:100%; font-size:0.82rem; border-collapse:collapse; margin:8px 0;">';
+                html += '<thead><tr style="background:#f3e8ff;"><th style="text-align:left; padding:4px 6px;">Clave</th><th style="text-align:left; padding:4px 6px;">Descripción</th><th style="text-align:right; padding:4px 6px;">Salidas</th><th style="text-align:right; padding:4px 6px;">Entradas</th><th style="text-align:right; padding:4px 6px;">Precio</th><th style="text-align:right; padding:4px 6px;">Total</th></tr></thead><tbody>';
+                data.forEach(p => {
+                    html += `<tr><td style="padding:4px 6px;">${p.clave || ''}</td><td style="padding:4px 6px;">${p.descripcion || ''}</td>`;
+                    html += `<td style="text-align:right; padding:4px 6px;">${Number(p.salidas || 0).toLocaleString('es-MX')}</td>`;
+                    html += `<td style="text-align:right; padding:4px 6px;">${Number(p.entradas || 0).toLocaleString('es-MX')}</td>`;
+                    html += `<td style="text-align:right; padding:4px 6px;">${fmtMxn(p.precio)}</td>`;
+                    html += `<td style="text-align:right; padding:4px 6px; font-weight:bold;">${fmtMxn(p.total)}</td></tr>`;
+                });
+                html += '</tbody></table>';
+                cont.innerHTML = html;
+            } catch (err) {
+                cont.innerHTML = '<p style="color:#b91c1c; font-size:0.78rem;">Error al cargar el detalle: ' + err.message + '</p>';
+                cont.dataset.cargado = '';
+            }
+        }
+
         function abrirReporteMapa() {
             // El mapa tiene su propio filtro de fechas; los filtros del menú son solo para la tabla dinámica.
             window.location.href = 'reporte-mapa.html';
@@ -2160,12 +2206,13 @@
             html += '<th style="text-align:right;">Subtotal</th><th style="text-align:right;">IVA</th><th style="text-align:right;">Total</th></tr></thead><tbody>';
 
             docs.forEach(d => {
-                html += `<tr><td>${d.id}</td><td>${d.fecha || ''}</td>`;
+                html += `<tr><td><a href="#" onclick="toggleDetallePartidas(event, ${d.id})" style="color:#7c3aed; font-weight:bold; text-decoration:underline; cursor:pointer;">${d.id}</a></td><td>${d.fecha || ''}</td>`;
                 html += `<td>${d.cliente_nombre || d.cliente_codigo || '—'}</td>`;
                 html += `<td>${d.notas || ''}</td><td>${d.usuario || ''}</td>`;
                 html += `<td style="text-align:right;">${fmtMxn(Number(d.subtotal || 0))}</td>`;
                 html += `<td style="text-align:right;">${fmtMxn(Number(d.iva || 0))}</td>`;
                 html += `<td style="text-align:right; font-weight:bold; color:#6b21a8;">${fmtMxn(Number(d.total || 0))}</td></tr>`;
+                html += `<tr id="fila-detalle-${d.id}" class="oculto"><td colspan="8" style="background:#faf5ff; padding:0 10px;"><div id="detalle-contenido-${d.id}"></div></td></tr>`;
             });
 
             html += `<tr class="fila-total-pivot"><td colspan="5">TOTAL (${docs.length} documentos)</td>`;
