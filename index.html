@@ -340,6 +340,12 @@
             } catch (e) { /* la sincronizacion es opcional */ }
         }
 
+        function sincronizarVentasPartidasErp() {
+            try {
+                supabaseClient.functions.invoke('sync-ventas-partidas-erp').catch(() => {});
+            } catch (e) { /* la sincronizacion es opcional */ }
+        }
+
         window.currentLat = null;
         window.currentLon = null;
         window.sucursalSeleccionadaId = null;
@@ -593,6 +599,7 @@
             function showApp(username) {
                 sincronizarVentasErp();
                 sincronizarVentasDocumentosErp();
+                sincronizarVentasPartidasErp();
                 loginScreen.style.display = "none";
                 appContent.classList.remove("oculto");
                 welcomeMsg.textContent = `👤 Hola, ${username}`;

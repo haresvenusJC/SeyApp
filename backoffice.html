@@ -1079,9 +1079,16 @@
             } catch (e) { /* la sincronizacion es opcional */ }
         }
 
+        function sincronizarVentasPartidasErp() {
+            try {
+                supabaseClient.functions.invoke('sync-ventas-partidas-erp').catch(() => {});
+            } catch (e) { /* la sincronizacion es opcional */ }
+        }
+
         async function inicializarBackOffice() {
             sincronizarVentasErp();
             sincronizarVentasDocumentosErp();
+            sincronizarVentasPartidasErp();
             const hoy = new Date();
             const hace7Dias = new Date();
             hace7Dias.setDate(hoy.getDate() - 6); // 7 días exactos (hoy incluido), sin repetir día de la semana
