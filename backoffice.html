@@ -795,6 +795,8 @@
         <!-- Resultado de reportes (menú lateral): se muestra aquí, al inicio de la página -->
         <div id="resultado-dinamico-container"></div>
 
+        <!-- Panel de auditorías (se oculta mientras se ve un reporte dinámico, para no confundir) -->
+        <div id="dashboard-resumen">
         <!-- Barra de Filtros Globales -->
         <div class="filters-bar">
             <div>
@@ -872,6 +874,7 @@
                     </tbody>
                 </table>
             </div>
+        </div>
         </div>
 
     </div>
@@ -1644,12 +1647,14 @@
 
         function mostrarResultadoReporte() {
             document.getElementById('resultado-dinamico-container').classList.add('visible');
+            document.getElementById('dashboard-resumen').classList.add('oculto');
         }
 
         function cerrarReporteDinamico() {
             const c = document.getElementById('resultado-dinamico-container');
             c.classList.remove('visible');
             c.innerHTML = '';
+            document.getElementById('dashboard-resumen').classList.remove('oculto');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
