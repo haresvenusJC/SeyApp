@@ -691,6 +691,76 @@
 
             </div>
         </div>
+
+        <div class="submenu">
+            <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-rentabilidad')">
+                <span>💹 Rentabilidad</span>
+                <span class="submenu-caret cerrado" id="caret-sm-rentabilidad">▾</span>
+            </button>
+            <div class="submenu-body oculto" id="sm-rentabilidad" style="padding: 10px;">
+
+                <div class="submenu" style="margin-bottom: 10px;">
+                    <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-rent-captura')">
+                        <span>📝 Capturar cargos del mes</span>
+                        <span class="submenu-caret cerrado" id="caret-sm-rent-captura">▾</span>
+                    </button>
+                    <div class="submenu-body oculto" id="sm-rent-captura">
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cliente:</label>
+                        <select id="rent-cap-cliente" style="width: 100%; margin-bottom: 8px;">
+                            <option value="">Selecciona un cliente…</option>
+                        </select>
+
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Mes:</label>
+                        <input type="month" id="rent-cap-mes" style="width: 100%; margin-bottom: 10px;">
+
+                        <div id="rent-cap-tipos-lista"><p style="color:#888; font-size:0.8rem;">Cargando categorías…</p></div>
+
+                        <button type="button" onclick="agregarTipoCargo()" style="background: #64748b; width: 100%; font-size: 0.85rem; padding: 8px; margin-top: 4px;">+ Agregar categoría de cargo</button>
+
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin: 10px 0 5px;">Notas (opcional):</label>
+                        <textarea id="rent-cap-notas" rows="2" style="width: 100%; margin-bottom: 8px;"></textarea>
+
+                        <button onclick="guardarCargosMes()" style="background: #16a34a; width: 100%;">💾 Guardar cargos del mes</button>
+                    </div>
+                </div>
+
+                <div class="submenu" style="margin-bottom: 10px;">
+                    <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-rent-dicc')">
+                        <span>📖 Diccionario de cargos por cliente</span>
+                        <span class="submenu-caret cerrado" id="caret-sm-rent-dicc">▾</span>
+                    </button>
+                    <div class="submenu-body oculto" id="sm-rent-dicc">
+                        <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Registra cómo le llama cada cliente a cada categoría, para no confundirte al leer sus facturas (esto es solo referencia).</p>
+                        <select id="rent-dicc-cliente" style="width: 100%; margin-bottom: 8px;">
+                            <option value="">Selecciona un cliente…</option>
+                        </select>
+                        <select id="rent-dicc-tipo" style="width: 100%; margin-bottom: 8px;"></select>
+                        <input type="text" id="rent-dicc-alias" placeholder="Ej. 'Gastos de manejo'" style="width: 100%; margin-bottom: 8px;">
+                        <button onclick="agregarAliasCargo()" style="background: #0891b2; width: 100%; margin-bottom: 10px;">+ Agregar alias</button>
+                        <div id="rent-dicc-lista"></div>
+                    </div>
+                </div>
+
+                <div class="submenu">
+                    <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-rent-analisis')">
+                        <span>📊 Analizar rentabilidad</span>
+                        <span class="submenu-caret cerrado" id="caret-sm-rent-analisis">▾</span>
+                    </button>
+                    <div class="submenu-body oculto" id="sm-rent-analisis">
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cliente:</label>
+                        <select id="rent-an-cliente" style="width: 100%; margin-bottom: 8px;">
+                            <option value="">Todos los clientes (suma)</option>
+                        </select>
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Desde (mes):</label>
+                        <input type="month" id="rent-an-mes-inicio" style="width: 100%; margin-bottom: 8px;">
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Hasta (mes):</label>
+                        <input type="month" id="rent-an-mes-fin" style="width: 100%; margin-bottom: 10px;">
+                        <button onclick="generarAnalisisRentabilidad()" style="background: #be185d; width: 100%;">📊 Generar análisis</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
     </div>
 
     <!-- 2. CONTENEDOR PRINCIPAL DEL BACK OFFICE (Oculto al inicio) -->
@@ -1031,6 +1101,7 @@
             poblarUsuariosPago();
             cargarCatalogoErp();
             cargarCatalogoClientesDocumentosErp();
+            cargarCatalogoRentabilidad();
         }
 
         async function cargarCatalogosAuxiliares() {
@@ -2095,6 +2166,260 @@
             html += `<td style="text-align:right;">${fmtMxn(totalIva)}</td>`;
             html += `<td style="text-align:right;">${fmtMxn(totalGeneral)}</td></tr>`;
             html += '</tbody></table></div>';
+
+            cont.innerHTML = html;
+        }
+
+        /* ===== Rentabilidad: cargos por cliente/mes (captura manual) vs ventas (ventas_documentos_erp) ===== */
+        window.catalogoCargosTipos = [];
+
+        async function cargarCatalogoRentabilidad() {
+            try {
+                const { data: tipos, error } = await supabaseClient.from('cargos_tipos').select('*').eq('activo', true).order('orden');
+                if (error) throw error;
+                window.catalogoCargosTipos = tipos || [];
+                renderTiposCargoCaptura();
+                poblarSelectTipoCargo();
+            } catch (err) {
+                console.warn('No se pudo cargar el catálogo de tipos de cargo (¿falta correr erp/rentabilidad.sql?):', err.message);
+            }
+
+            try {
+                const { data, error } = await supabaseClient.from('ventas_documentos_erp').select('cliente_nombre');
+                if (error) throw error;
+                const clientes = [...new Set((data || []).map(r => r.cliente_nombre).filter(Boolean))]
+                    .sort((a, b) => a.localeCompare(b, 'es'));
+                let optsCliente = '<option value="">Selecciona un cliente…</option>';
+                clientes.forEach(c => { optsCliente += `<option value="${c}">${c}</option>`; });
+                ['rent-cap-cliente', 'rent-dicc-cliente'].forEach(id => {
+                    const sel = document.getElementById(id);
+                    if (sel) sel.innerHTML = optsCliente;
+                });
+                const selAn = document.getElementById('rent-an-cliente');
+                if (selAn) selAn.innerHTML = '<option value="">Todos los clientes (suma)</option>' + clientes.map(c => `<option value="${c}">${c}</option>`).join('');
+            } catch (err) {
+                console.warn('No se pudo cargar clientes para rentabilidad:', err.message);
+            }
+
+            cargarDiccionarioAlias();
+        }
+
+        function renderTiposCargoCaptura() {
+            const cont = document.getElementById('rent-cap-tipos-lista');
+            if (!cont) return;
+            if (!window.catalogoCargosTipos.length) {
+                cont.innerHTML = '<p style="color:#888; font-size:0.8rem;">No hay categorías de cargo todavía. Agrega una.</p>';
+                return;
+            }
+            let html = '';
+            window.catalogoCargosTipos.forEach(t => {
+                html += `<label style="font-weight: bold; color: #444; font-size: 0.85rem; display: block; margin-bottom: 3px;">${t.nombre}:</label>
+                         <input type="number" step="0.01" class="rent-cap-input" data-tipo-id="${t.id}" placeholder="$0.00" style="width: 100%; margin-bottom: 8px;">`;
+            });
+            cont.innerHTML = html;
+        }
+
+        function poblarSelectTipoCargo() {
+            const sel = document.getElementById('rent-dicc-tipo');
+            if (!sel) return;
+            sel.innerHTML = window.catalogoCargosTipos.map(t => `<option value="${t.id}">${t.nombre}</option>`).join('');
+        }
+
+        async function agregarTipoCargo() {
+            const nombre = prompt('Nombre de la nueva categoría de cargo (ej. "Publicidad en tienda"):');
+            if (!nombre || !nombre.trim()) return;
+            try {
+                const { error } = await supabaseClient.from('cargos_tipos')
+                    .insert({ nombre: nombre.trim(), orden: window.catalogoCargosTipos.length + 1 });
+                if (error) throw error;
+                await cargarCatalogoRentabilidad();
+            } catch (err) {
+                alert('Error al agregar la categoría: ' + err.message);
+            }
+        }
+
+        async function guardarCargosMes() {
+            try {
+                const cliente = document.getElementById('rent-cap-cliente').value;
+                const mes = document.getElementById('rent-cap-mes').value; // "YYYY-MM"
+                const notas = document.getElementById('rent-cap-notas').value.trim();
+                if (!cliente) { alert('Selecciona un cliente.'); return; }
+                if (!mes) { alert('Selecciona el mes.'); return; }
+
+                const periodo = `${mes}-01`;
+                const filas = [];
+                document.querySelectorAll('.rent-cap-input').forEach(inp => {
+                    const val = inp.value.trim();
+                    if (val === '') return;
+                    filas.push({
+                        cliente_nombre: cliente,
+                        periodo,
+                        cargo_tipo_id: Number(inp.dataset.tipoId),
+                        monto: Number(val),
+                        notas: notas || null,
+                    });
+                });
+                if (!filas.length) { alert('Captura al menos un monto.'); return; }
+
+                const { error } = await supabaseClient.from('cargos_mensuales')
+                    .upsert(filas, { onConflict: 'cliente_nombre,periodo,cargo_tipo_id' });
+                if (error) throw error;
+
+                alert('Cargos guardados correctamente.');
+                document.querySelectorAll('.rent-cap-input').forEach(inp => inp.value = '');
+                document.getElementById('rent-cap-notas').value = '';
+            } catch (err) {
+                alert('Error al guardar los cargos: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        async function cargarDiccionarioAlias() {
+            const cont = document.getElementById('rent-dicc-lista');
+            if (!cont) return;
+            try {
+                const { data, error } = await supabaseClient.from('cargos_alias').select('*, cargos_tipos(nombre)').order('cliente_nombre');
+                if (error) throw error;
+                if (!data || !data.length) { cont.innerHTML = '<p style="color:#888; font-size:0.8rem;">Sin alias registrados todavía.</p>'; return; }
+                let html = '<div style="max-height:220px; overflow-y:auto; font-size:0.82rem;">';
+                data.forEach(a => {
+                    html += `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #eee;">
+                        <span><b>${a.cliente_nombre}</b>: "${a.alias_nombre}" → ${a.cargos_tipos?.nombre || '—'}</span>
+                        <button onclick="borrarAliasCargo(${a.id})" style="background:#dc2626; padding:3px 8px; font-size:0.75rem;">✕</button>
+                    </div>`;
+                });
+                html += '</div>';
+                cont.innerHTML = html;
+            } catch (err) {
+                cont.innerHTML = '<p style="color:#b91c1c; font-size:0.8rem;">Error al cargar el diccionario: ' + err.message + '</p>';
+            }
+        }
+
+        async function agregarAliasCargo() {
+            try {
+                const cliente = document.getElementById('rent-dicc-cliente').value;
+                const tipoId = document.getElementById('rent-dicc-tipo').value;
+                const alias = document.getElementById('rent-dicc-alias').value.trim();
+                if (!cliente || !tipoId || !alias) { alert('Completa cliente, categoría y el nombre que usa el cliente.'); return; }
+                const { error } = await supabaseClient.from('cargos_alias')
+                    .insert({ cliente_nombre: cliente, cargo_tipo_id: Number(tipoId), alias_nombre: alias });
+                if (error) throw error;
+                document.getElementById('rent-dicc-alias').value = '';
+                cargarDiccionarioAlias();
+            } catch (err) {
+                alert('Error al agregar el alias: ' + err.message);
+            }
+        }
+
+        async function borrarAliasCargo(id) {
+            if (!confirm('¿Borrar este alias?')) return;
+            try {
+                const { error } = await supabaseClient.from('cargos_alias').delete().eq('id', id);
+                if (error) throw error;
+                cargarDiccionarioAlias();
+            } catch (err) {
+                alert('Error al borrar: ' + err.message);
+            }
+        }
+
+        async function generarAnalisisRentabilidad() {
+            try {
+                const cliente = document.getElementById('rent-an-cliente').value;
+                const mesInicio = document.getElementById('rent-an-mes-inicio').value;
+                const mesFin = document.getElementById('rent-an-mes-fin').value;
+
+                let qVentas = supabaseClient.from('ventas_documentos_erp').select('fecha, total, cliente_nombre').limit(20000);
+                if (cliente) qVentas = qVentas.eq('cliente_nombre', cliente);
+                if (mesInicio) qVentas = qVentas.gte('fecha', `${mesInicio}-01`);
+                if (mesFin) {
+                    const [y, m] = mesFin.split('-').map(Number);
+                    const ultimoDia = new Date(y, m, 0).toISOString().split('T')[0];
+                    qVentas = qVentas.lte('fecha', ultimoDia);
+                }
+                const { data: ventas, error: errV } = await qVentas;
+                if (errV) throw errV;
+
+                let qCargos = supabaseClient.from('cargos_mensuales').select('*, cargos_tipos(nombre)').limit(20000);
+                if (cliente) qCargos = qCargos.eq('cliente_nombre', cliente);
+                if (mesInicio) qCargos = qCargos.gte('periodo', `${mesInicio}-01`);
+                if (mesFin) qCargos = qCargos.lte('periodo', `${mesFin}-01`);
+                const { data: cargos, error: errC } = await qCargos;
+                if (errC) throw errC;
+
+                construirAnalisisRentabilidad(ventas || [], cargos || [], { cliente, mesInicio, mesFin });
+                toggleSidebar();
+
+                setTimeout(() => {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                }, 150);
+
+            } catch (err) {
+                alert('Error al generar el análisis de rentabilidad: ' + err.message);
+                console.error(err);
+            }
+        }
+
+        function construirAnalisisRentabilidad(ventas, cargos, filtros) {
+            mostrarResultadoReporte();
+            const cont = document.getElementById('resultado-dinamico-container');
+            const fmtMxn = n => n.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+
+            const ventasPorMes = {};
+            ventas.forEach(v => {
+                const mes = (v.fecha || '').slice(0, 7);
+                if (!mes) return;
+                ventasPorMes[mes] = (ventasPorMes[mes] || 0) + Number(v.total || 0);
+            });
+
+            const cargosPorMes = {};
+            cargos.forEach(c => {
+                const mes = (c.periodo || '').slice(0, 7);
+                if (!mes) return;
+                if (!cargosPorMes[mes]) cargosPorMes[mes] = {};
+                const nombreTipo = c.cargos_tipos?.nombre || 'Otro';
+                cargosPorMes[mes][nombreTipo] = (cargosPorMes[mes][nombreTipo] || 0) + Number(c.monto || 0);
+            });
+
+            const meses = [...new Set([...Object.keys(ventasPorMes), ...Object.keys(cargosPorMes)])].sort();
+
+            if (!meses.length) {
+                cont.innerHTML = barraResultadoReporte('💹 Análisis de Rentabilidad') +
+                    '<p style="padding: 10px; color: #666; background: #f8f9fa; border-radius: 8px;">No hay ventas ni cargos capturados con esos filtros todavía.</p>';
+                return;
+            }
+
+            const NOMBRES_MES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            const fmtMesLargo = m => { const [y, mm] = m.split('-'); return `${NOMBRES_MES_LARGO[parseInt(mm) - 1]} ${y}`; };
+
+            let html = barraResultadoReporte('💹 Análisis de Rentabilidad');
+            html += `<p style="font-size: 0.85rem; color: #666; margin-top: 0;">
+                ${filtros.cliente ? 'Cliente: <b>' + filtros.cliente + '</b> · ' : 'Todos los clientes (suma). '}
+                <b>${meses.length}</b> mes${meses.length === 1 ? '' : 'es'} analizado${meses.length === 1 ? '' : 's'}.
+            </p>`;
+
+            meses.forEach(mes => {
+                const ventaMes = ventasPorMes[mes] || 0;
+                const cargosMes = cargosPorMes[mes] || {};
+                const totalCargos = Object.values(cargosMes).reduce((a, b) => a + b, 0);
+                const rentabilidad = ventaMes - totalCargos;
+                const margen = ventaMes > 0 ? (rentabilidad / ventaMes * 100) : null;
+                const colorRent = rentabilidad >= 0 ? '#16a34a' : '#dc2626';
+
+                html += `<div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:14px 16px; margin-bottom:14px;">
+                    <h4 style="margin:0 0 10px; color:#6b21a8; border:none;">${fmtMesLargo(mes)}</h4>
+                    <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+                        <tr><td style="padding:4px 0;">Ventas</td><td style="text-align:right; font-weight:bold;">${fmtMxn(ventaMes)}</td></tr>`;
+
+                window.catalogoCargosTipos.forEach(t => {
+                    const monto = cargosMes[t.nombre] || 0;
+                    html += `<tr><td style="padding:4px 0; color:#666;">− ${t.nombre}</td><td style="text-align:right; color:#666;">${fmtMxn(monto)}</td></tr>`;
+                });
+
+                html += `<tr style="border-top:1px solid #e2e8f0;"><td style="padding:6px 0; font-weight:bold;">Total cargos</td><td style="text-align:right; font-weight:bold;">${fmtMxn(totalCargos)}</td></tr>
+                        <tr><td style="padding:6px 0; font-weight:bold; color:${colorRent};">Rentabilidad</td><td style="text-align:right; font-weight:bold; color:${colorRent};">${fmtMxn(rentabilidad)} ${margen !== null ? '(' + margen.toFixed(1) + '%)' : ''}</td></tr>
+                    </table>
+                </div>`;
+            });
 
             cont.innerHTML = html;
         }
