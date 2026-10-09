@@ -2059,7 +2059,7 @@
         }
 
         // Clientes que no deben aparecer en ningun selector/listado (cuentas internas, de prueba, etc.)
-        const PATRONES_CLIENTE_EXCLUIDO = [/sensexx/i, /javier\s+carranza/i];
+        const PATRONES_CLIENTE_EXCLUIDO = [/sensexx/i, /javier\s+carranza/i, /mostrador/i, /novelties\s+by\s+nasswalk/i];
         const esClienteExcluido = (nombre) => PATRONES_CLIENTE_EXCLUIDO.some(p => p.test(nombre || ''));
 
         /* ===== Ventas ERP: piezas vendidas por producto/mes, calculado de ventas_partidas_erp
