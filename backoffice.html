@@ -2091,9 +2091,22 @@
                 const [prodCadena, prodRef] = productoKey ? productoKey.split('␟') : [null, null];
 
                 const LIMITE = 50000;
+                // La cadena es un agrupamiento calculado (clientes_cadenas): resolvemos a la lista
+                // real de clientes ANTES de consultar, para que el limite se gaste solo en lo
+                // relevante (si no, con muchos clientes ajenos el limite se agota antes de
+                // llegar a los meses mas recientes de la cadena que realmente pediste).
+                const filtroCadena = prodRef ? prodCadena : cadena;
+                let clientesCadena = null;
+                if (filtroCadena) {
+                    clientesCadena = Object.keys(window.mapaClienteCadenaErp).filter(c => window.mapaClienteCadenaErp[c] === filtroCadena);
+                    clientesCadena.push(filtroCadena); // clientes sin agrupar se guardan con su propio nombre como "cadena"
+                }
+
                 let query = supabaseClient.from('ventas_partidas_erp')
-                    .select('cliente_nombre, clave, descripcion, fecha, salidas, entradas').limit(LIMITE);
+                    .select('cliente_nombre, clave, descripcion, fecha, salidas, entradas')
+                    .order('fecha', { ascending: true }).limit(LIMITE);
                 if (prodRef) query = query.eq('clave', prodRef);
+                if (clientesCadena) query = query.in('cliente_nombre', clientesCadena);
                 if (mesInicio) query = query.gte('fecha', `${mesInicio}-01`);
                 if (mesFin) {
                     const [y, m] = mesFin.split('-').map(Number);
@@ -2104,15 +2117,9 @@
                 const { data: partidas, error } = await query;
                 if (error) throw error;
 
-                // La cadena es un agrupamiento calculado (clientes_cadenas), asi que se filtra aqui.
-                const filtroCadena = prodRef ? prodCadena : cadena;
-                const filtradas = filtroCadena
-                    ? (partidas || []).filter(p => (window.mapaClienteCadenaErp[p.cliente_nombre] || p.cliente_nombre) === filtroCadena)
-                    : (partidas || []);
-
                 const { data: existencias } = await supabaseClient.from('existencias_erp').select('*').order('fecha', { ascending: false });
 
-                construirReporteVentasErp(filtradas, existencias || [], cadena, mesInicio, mesFin, (partidas || []).length >= LIMITE);
+                construirReporteVentasErp(partidas || [], existencias || [], cadena, mesInicio, mesFin, (partidas || []).length >= LIMITE);
                 toggleSidebar();
 
                 setTimeout(() => {
