@@ -2158,7 +2158,21 @@
                 porProducto[key].total += neto;
             });
 
-            const meses = [...new Set(Object.values(porProducto).flatMap(f => Object.keys(f.porMes)))].sort();
+            let meses;
+            if (mesInicio || mesFin) {
+                // Lista todos los meses del rango pedido (aunque algunos salgan en cero),
+                // no solo los que tuvieron ventas.
+                const [y0, m0] = (mesInicio || mesFin).split('-').map(Number);
+                const [y1, m1] = (mesFin || mesInicio).split('-').map(Number);
+                meses = [];
+                let y = y0, m = m0;
+                while (y < y1 || (y === y1 && m <= m1)) {
+                    meses.push(`${y}-${String(m).padStart(2, '0')}-01`);
+                    m++; if (m > 12) { m = 1; y++; }
+                }
+            } else {
+                meses = [...new Set(Object.values(porProducto).flatMap(f => Object.keys(f.porMes)))].sort();
+            }
             const filas = Object.values(porProducto).sort((a, b) => b.total - a.total);
             const totalGeneral = filas.reduce((a, f) => a + f.total, 0);
             const totalesPorMes = {};
