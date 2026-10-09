@@ -2058,6 +2058,10 @@
             cont.innerHTML = html;
         }
 
+        // Clientes que no deben aparecer en ningun selector/listado (cuentas internas, de prueba, etc.)
+        const PATRONES_CLIENTE_EXCLUIDO = [/sensexx/i, /javier\s+carranza/i];
+        const esClienteExcluido = (nombre) => PATRONES_CLIENTE_EXCLUIDO.some(p => p.test(nombre || ''));
+
         /* ===== Ventas ERP: piezas vendidas por producto/mes, calculado de ventas_partidas_erp
            (dinamico: cualquier rango de fechas, todos los clientes/cadenas). La existencia
            (stock actual) sigue viniendo del sync fijo original (es la unica fuente posible). ===== */
@@ -2078,7 +2082,7 @@
                 const vistos = new Set();
                 window.catalogoErp = [];
                 data.forEach(r => {
-                    if (!r.clave) return;
+                    if (!r.clave || esClienteExcluido(r.cliente_nombre)) return;
                     const cadena = window.mapaClienteCadenaErp[r.cliente_nombre] || r.cliente_nombre;
                     const key = cadena + '␟' + r.clave;
                     if (vistos.has(key)) return;
@@ -2269,7 +2273,7 @@
         async function cargarCatalogoClientesDocumentosErp() {
             try {
                 const data = await fetchPaginado(() => supabaseClient.from('ventas_documentos_erp').select('cliente_nombre'));
-                const clientes = [...new Set(data.map(r => r.cliente_nombre).filter(Boolean))]
+                const clientes = [...new Set(data.map(r => r.cliente_nombre).filter(c => c && !esClienteExcluido(c)))]
                     .sort((a, b) => a.localeCompare(b, 'es'));
                 let opts = '<option value="">Todos los clientes</option>';
                 clientes.forEach(c => { opts += `<option value="${c}">${c}</option>`; });
@@ -2376,7 +2380,7 @@
 
             try {
                 const data = await fetchPaginado(() => supabaseClient.from('ventas_documentos_erp').select('cliente_nombre'));
-                const clientes = [...new Set(data.map(r => r.cliente_nombre).filter(Boolean))]
+                const clientes = [...new Set(data.map(r => r.cliente_nombre).filter(c => c && !esClienteExcluido(c)))]
                     .sort((a, b) => a.localeCompare(b, 'es'));
                 window.listaClientesRentabilidad = clientes;
                 let optsCliente = '<option value="">Selecciona un cliente…</option>';
