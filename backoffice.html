@@ -219,6 +219,9 @@
         }
         .submenu-header:hover { background: #e9d5ff; }
         .submenu-body { padding: 14px; }
+        .submenu-body .submenu { border-color: #e9d5ff; }
+        .submenu-body .submenu .submenu-header { background: #faf5ff; font-size: 0.88rem; padding: 10px 12px; }
+        .submenu-body .submenu .submenu-header:hover { background: #f3e8ff; }
         .submenu-caret { transition: transform 0.2s ease; font-size: 0.8rem; }
         .submenu-caret.cerrado { transform: rotate(-90deg); }
         .checkbox-grid {
@@ -628,54 +631,64 @@
         </div>
 
         <div class="submenu">
-            <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-erp')">
-                <span>📦 Ventas ERP</span>
-                <span class="submenu-caret cerrado" id="caret-sm-erp">▾</span>
+            <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-reportes-ventas')">
+                <span>📊 Reportes Ventas</span>
+                <span class="submenu-caret cerrado" id="caret-sm-reportes-ventas">▾</span>
             </button>
-            <div class="submenu-body oculto" id="sm-erp">
-                <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Ventas mensuales y existencia, sincronizadas desde el ERP (se leen de Supabase, no en vivo del ERP).</p>
+            <div class="submenu-body oculto" id="sm-reportes-ventas" style="padding: 10px;">
 
-                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cadena:</label>
-                <select id="erp-cadena" style="width: 100%; margin-bottom: 8px;" onchange="poblarProductosErp()">
-                    <option value="">Todas las cadenas</option>
-                </select>
+                <div class="submenu" style="margin-bottom: 10px;">
+                    <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-erp')">
+                        <span>📦 Ventas ERP</span>
+                        <span class="submenu-caret cerrado" id="caret-sm-erp">▾</span>
+                    </button>
+                    <div class="submenu-body oculto" id="sm-erp">
+                        <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Ventas mensuales y existencia, sincronizadas desde el ERP (se leen de Supabase, no en vivo del ERP).</p>
 
-                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Producto (opcional):</label>
-                <select id="erp-producto" style="width: 100%; margin-bottom: 8px;">
-                    <option value="">Todos los productos</option>
-                </select>
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cadena:</label>
+                        <select id="erp-cadena" style="width: 100%; margin-bottom: 8px;" onchange="poblarProductosErp()">
+                            <option value="">Todas las cadenas</option>
+                        </select>
 
-                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Desde (mes):</label>
-                <input type="month" id="erp-mes-inicio" style="width: 100%; margin-bottom: 8px;">
-                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Hasta (mes):</label>
-                <input type="month" id="erp-mes-fin" style="width: 100%; margin-bottom: 10px;">
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Producto (opcional):</label>
+                        <select id="erp-producto" style="width: 100%; margin-bottom: 8px;">
+                            <option value="">Todos los productos</option>
+                        </select>
 
-                <button onclick="generarReporteVentasErp()" style="background: #0891b2; width: 100%;">📦 Generar reporte de ventas</button>
-            </div>
-        </div>
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Desde (mes):</label>
+                        <input type="month" id="erp-mes-inicio" style="width: 100%; margin-bottom: 8px;">
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Hasta (mes):</label>
+                        <input type="month" id="erp-mes-fin" style="width: 100%; margin-bottom: 10px;">
 
-        <div class="submenu">
-            <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-docs')">
-                <span>🧾 Ventas Documentos (Folios)</span>
-                <span class="submenu-caret cerrado" id="caret-sm-docs">▾</span>
-            </button>
-            <div class="submenu-body oculto" id="sm-docs">
-                <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Ventas en pesos por documento/folio, con cliente, sincronizadas desde el ERP.</p>
+                        <button onclick="generarReporteVentasErp()" style="background: #0891b2; width: 100%;">📦 Generar reporte de ventas</button>
+                    </div>
+                </div>
 
-                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cliente (opcional):</label>
-                <select id="docs-cliente" style="width: 100%; margin-bottom: 8px;">
-                    <option value="">Todos los clientes</option>
-                </select>
+                <div class="submenu">
+                    <button type="button" class="submenu-header" onclick="toggleSubmenu('sm-docs')">
+                        <span>🧾 Ventas Documentos (Folios)</span>
+                        <span class="submenu-caret cerrado" id="caret-sm-docs">▾</span>
+                    </button>
+                    <div class="submenu-body oculto" id="sm-docs">
+                        <p style="font-size: 0.8rem; color: #666; margin: 0 0 10px;">Ventas en pesos por documento/folio, con cliente, sincronizadas desde el ERP.</p>
 
-                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Folio (opcional):</label>
-                <input type="number" id="docs-folio" placeholder="Ej. 12345" style="width: 100%; margin-bottom: 8px;">
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Cliente (opcional):</label>
+                        <select id="docs-cliente" style="width: 100%; margin-bottom: 8px;">
+                            <option value="">Todos los clientes</option>
+                        </select>
 
-                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Desde (fecha):</label>
-                <input type="date" id="docs-fecha-inicio" style="width: 100%; margin-bottom: 8px;">
-                <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Hasta (fecha):</label>
-                <input type="date" id="docs-fecha-fin" style="width: 100%; margin-bottom: 10px;">
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Folio (opcional):</label>
+                        <input type="number" id="docs-folio" placeholder="Ej. 12345" style="width: 100%; margin-bottom: 8px;">
 
-                <button onclick="generarReporteVentasDocumentos()" style="background: #7c3aed; width: 100%;">🧾 Generar reporte de documentos</button>
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Desde (fecha):</label>
+                        <input type="date" id="docs-fecha-inicio" style="width: 100%; margin-bottom: 8px;">
+                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin-bottom: 5px;">Hasta (fecha):</label>
+                        <input type="date" id="docs-fecha-fin" style="width: 100%; margin-bottom: 10px;">
+
+                        <button onclick="generarReporteVentasDocumentos()" style="background: #7c3aed; width: 100%;">🧾 Generar reporte de documentos</button>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
