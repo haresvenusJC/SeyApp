@@ -2082,6 +2082,22 @@
             sel.innerHTML = opts;
         }
 
+        // Supabase (PostgREST) limita cada consulta a ~1000 filas sin importar el .limit()
+        // que pidamos (es un tope del proyecto, no del cliente). Para traer todo, paginamos
+        // con .range() hasta que una pagina regrese menos filas de las pedidas.
+        async function fetchPaginado(crearQuery, limiteDuro = 200000, tamanoPagina = 1000) {
+            let todas = [];
+            let desde = 0;
+            while (todas.length < limiteDuro) {
+                const { data, error } = await crearQuery().range(desde, desde + tamanoPagina - 1);
+                if (error) throw error;
+                todas = todas.concat(data || []);
+                if (!data || data.length < tamanoPagina) break;
+                desde += tamanoPagina;
+            }
+            return todas;
+        }
+
         async function generarReporteVentasErp() {
             try {
                 const cadena = document.getElementById('erp-cadena').value;
@@ -2090,7 +2106,7 @@
                 const mesFin = document.getElementById('erp-mes-fin').value;
                 const [prodCadena, prodRef] = productoKey ? productoKey.split('␟') : [null, null];
 
-                const LIMITE = 50000;
+                const LIMITE = 200000;
                 // La cadena es un agrupamiento calculado (clientes_cadenas): resolvemos a la lista
                 // real de clientes ANTES de consultar, para que el limite se gaste solo en lo
                 // relevante (si no, con muchos clientes ajenos el limite se agota antes de
@@ -2102,24 +2118,26 @@
                     clientesCadena.push(filtroCadena); // clientes sin agrupar se guardan con su propio nombre como "cadena"
                 }
 
-                let query = supabaseClient.from('ventas_partidas_erp')
-                    .select('cliente_nombre, clave, descripcion, fecha, salidas, entradas')
-                    .order('fecha', { ascending: true }).limit(LIMITE);
-                if (prodRef) query = query.eq('clave', prodRef);
-                if (clientesCadena) query = query.in('cliente_nombre', clientesCadena);
-                if (mesInicio) query = query.gte('fecha', `${mesInicio}-01`);
-                if (mesFin) {
-                    const [y, m] = mesFin.split('-').map(Number);
-                    const ultimoDia = new Date(y, m, 0).toISOString().split('T')[0];
-                    query = query.lte('fecha', ultimoDia);
-                }
+                const crearQuery = () => {
+                    let q = supabaseClient.from('ventas_partidas_erp')
+                        .select('cliente_nombre, clave, descripcion, fecha, salidas, entradas')
+                        .order('fecha', { ascending: true });
+                    if (prodRef) q = q.eq('clave', prodRef);
+                    if (clientesCadena) q = q.in('cliente_nombre', clientesCadena);
+                    if (mesInicio) q = q.gte('fecha', `${mesInicio}-01`);
+                    if (mesFin) {
+                        const [y, m] = mesFin.split('-').map(Number);
+                        const ultimoDia = new Date(y, m, 0).toISOString().split('T')[0];
+                        q = q.lte('fecha', ultimoDia);
+                    }
+                    return q;
+                };
 
-                const { data: partidas, error } = await query;
-                if (error) throw error;
+                const partidas = await fetchPaginado(crearQuery, LIMITE);
 
                 const { data: existencias } = await supabaseClient.from('existencias_erp').select('*').order('fecha', { ascending: false });
 
-                construirReporteVentasErp(partidas || [], existencias || [], cadena, mesInicio, mesFin, (partidas || []).length >= LIMITE);
+                construirReporteVentasErp(partidas, existencias || [], cadena, mesInicio, mesFin, partidas.length >= LIMITE);
                 toggleSidebar();
 
                 setTimeout(() => {
