@@ -2032,21 +2032,18 @@
 
         async function cargarCatalogoErp() {
             try {
-                const { data: mapa, error: errMapa } = await supabaseClient.from('clientes_cadenas').select('cliente_nombre, cadena').limit(20000);
-                if (errMapa) throw errMapa;
+                const mapa = await fetchPaginado(() => supabaseClient.from('clientes_cadenas').select('cliente_nombre, cadena'));
                 window.mapaClienteCadenaErp = {};
-                (mapa || []).forEach(r => { window.mapaClienteCadenaErp[r.cliente_nombre] = r.cadena; });
+                mapa.forEach(r => { window.mapaClienteCadenaErp[r.cliente_nombre] = r.cadena; });
             } catch (err) {
                 console.warn('No se pudo cargar la agrupación de cadenas (¿falta correr erp/clientes_cadenas.sql?):', err.message);
             }
 
             try {
-                const { data, error } = await supabaseClient.from('ventas_partidas_erp')
-                    .select('cliente_nombre, clave, descripcion').limit(50000);
-                if (error) throw error;
+                const data = await fetchPaginado(() => supabaseClient.from('ventas_partidas_erp').select('cliente_nombre, clave, descripcion'));
                 const vistos = new Set();
                 window.catalogoErp = [];
-                (data || []).forEach(r => {
+                data.forEach(r => {
                     if (!r.clave) return;
                     const cadena = window.mapaClienteCadenaErp[r.cliente_nombre] || r.cliente_nombre;
                     const key = cadena + '␟' + r.clave;
@@ -2237,9 +2234,8 @@
         /* ===== Ventas Documentos (Folios): lee ventas_documentos_erp (ya sincronizada en Supabase) ===== */
         async function cargarCatalogoClientesDocumentosErp() {
             try {
-                const { data, error } = await supabaseClient.from('ventas_documentos_erp').select('cliente_nombre').limit(20000);
-                if (error) throw error;
-                const clientes = [...new Set((data || []).map(r => r.cliente_nombre).filter(Boolean))]
+                const data = await fetchPaginado(() => supabaseClient.from('ventas_documentos_erp').select('cliente_nombre'));
+                const clientes = [...new Set(data.map(r => r.cliente_nombre).filter(Boolean))]
                     .sort((a, b) => a.localeCompare(b, 'es'));
                 let opts = '<option value="">Todos los clientes</option>';
                 clientes.forEach(c => { opts += `<option value="${c}">${c}</option>`; });
@@ -2257,16 +2253,17 @@
                 const fechaInicio = document.getElementById('docs-fecha-inicio').value;
                 const fechaFin = document.getElementById('docs-fecha-fin').value;
 
-                let query = supabaseClient.from('ventas_documentos_erp').select('*').order('fecha', { ascending: false }).limit(5000);
-                if (folio) query = query.eq('id', Number(folio));
-                if (cliente) query = query.eq('cliente_nombre', cliente);
-                if (fechaInicio) query = query.gte('fecha', fechaInicio);
-                if (fechaFin) query = query.lte('fecha', fechaFin);
+                const crearQuery = () => {
+                    let q = supabaseClient.from('ventas_documentos_erp').select('*').order('fecha', { ascending: false });
+                    if (folio) q = q.eq('id', Number(folio));
+                    if (cliente) q = q.eq('cliente_nombre', cliente);
+                    if (fechaInicio) q = q.gte('fecha', fechaInicio);
+                    if (fechaFin) q = q.lte('fecha', fechaFin);
+                    return q;
+                };
+                const data = await fetchPaginado(crearQuery, 5000);
 
-                const { data, error } = await query;
-                if (error) throw error;
-
-                construirReporteVentasDocumentos(data || [], { cliente, folio, fechaInicio, fechaFin });
+                construirReporteVentasDocumentos(data, { cliente, folio, fechaInicio, fechaFin });
                 toggleSidebar();
 
                 setTimeout(() => {
@@ -2344,9 +2341,8 @@
             }
 
             try {
-                const { data, error } = await supabaseClient.from('ventas_documentos_erp').select('cliente_nombre').limit(20000);
-                if (error) throw error;
-                const clientes = [...new Set((data || []).map(r => r.cliente_nombre).filter(Boolean))]
+                const data = await fetchPaginado(() => supabaseClient.from('ventas_documentos_erp').select('cliente_nombre'));
+                const clientes = [...new Set(data.map(r => r.cliente_nombre).filter(Boolean))]
                     .sort((a, b) => a.localeCompare(b, 'es'));
                 window.listaClientesRentabilidad = clientes;
                 let optsCliente = '<option value="">Selecciona un cliente…</option>';
@@ -2358,10 +2354,9 @@
             }
 
             try {
-                const { data, error } = await supabaseClient.from('clientes_cadenas').select('cliente_nombre, cadena').limit(20000);
-                if (error) throw error;
+                const data = await fetchPaginado(() => supabaseClient.from('clientes_cadenas').select('cliente_nombre, cadena'));
                 window.mapaClienteCadena = {};
-                (data || []).forEach(r => { window.mapaClienteCadena[r.cliente_nombre] = r.cadena; });
+                data.forEach(r => { window.mapaClienteCadena[r.cliente_nombre] = r.cadena; });
             } catch (err) {
                 console.warn('No se pudo cargar el catálogo de cadenas (¿falta correr erp/clientes_cadenas.sql?):', err.message);
             }
@@ -2408,9 +2403,8 @@
             const cont = document.getElementById('cadena-lista');
             if (!cont) return;
             try {
-                const { data, error } = await supabaseClient.from('clientes_cadenas').select('*').order('cadena').limit(20000);
-                if (error) throw error;
-                if (!data || !data.length) { cont.innerHTML = '<p style="color:#888;">Sin cadenas agrupadas todavía.</p>'; return; }
+                const data = await fetchPaginado(() => supabaseClient.from('clientes_cadenas').select('*').order('cadena'));
+                if (!data.length) { cont.innerHTML = '<p style="color:#888;">Sin cadenas agrupadas todavía.</p>'; return; }
                 const porCadena = {};
                 data.forEach(r => { (porCadena[r.cadena] ??= []).push(r.cliente_nombre); });
                 let html = '';
@@ -2601,25 +2595,27 @@
                     etiqueta = `Cliente: ${cliente}`;
                 }
 
-                let qVentas = supabaseClient.from('ventas_documentos_erp').select('*').order('fecha', { ascending: false }).limit(20000);
-                if (listaClientes) qVentas = qVentas.in('cliente_nombre', listaClientes);
-                if (mesInicio) qVentas = qVentas.gte('fecha', `${mesInicio}-01`);
-                if (mesFin) {
-                    const [y, m] = mesFin.split('-').map(Number);
-                    const ultimoDia = new Date(y, m, 0).toISOString().split('T')[0];
-                    qVentas = qVentas.lte('fecha', ultimoDia);
-                }
-                const { data: ventas, error: errV } = await qVentas;
-                if (errV) throw errV;
+                const ventas = await fetchPaginado(() => {
+                    let q = supabaseClient.from('ventas_documentos_erp').select('*').order('fecha', { ascending: false });
+                    if (listaClientes) q = q.in('cliente_nombre', listaClientes);
+                    if (mesInicio) q = q.gte('fecha', `${mesInicio}-01`);
+                    if (mesFin) {
+                        const [y, m] = mesFin.split('-').map(Number);
+                        const ultimoDia = new Date(y, m, 0).toISOString().split('T')[0];
+                        q = q.lte('fecha', ultimoDia);
+                    }
+                    return q;
+                });
 
-                let qCargos = supabaseClient.from('cargos_mensuales').select('*, cargos_tipos(nombre)').limit(20000);
-                if (listaClientes) qCargos = qCargos.in('cliente_nombre', listaClientes);
-                if (mesInicio) qCargos = qCargos.gte('periodo', `${mesInicio}-01`);
-                if (mesFin) qCargos = qCargos.lte('periodo', `${mesFin}-01`);
-                const { data: cargos, error: errC } = await qCargos;
-                if (errC) throw errC;
+                const cargos = await fetchPaginado(() => {
+                    let q = supabaseClient.from('cargos_mensuales').select('*, cargos_tipos(nombre)');
+                    if (listaClientes) q = q.in('cliente_nombre', listaClientes);
+                    if (mesInicio) q = q.gte('periodo', `${mesInicio}-01`);
+                    if (mesFin) q = q.lte('periodo', `${mesFin}-01`);
+                    return q;
+                });
 
-                construirAnalisisRentabilidad(ventas || [], cargos || [], { etiqueta });
+                construirAnalisisRentabilidad(ventas, cargos, { etiqueta });
                 toggleSidebar();
 
                 setTimeout(() => {
