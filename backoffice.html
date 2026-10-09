@@ -2082,7 +2082,7 @@
         /* ===== Ventas Documentos (Folios): lee ventas_documentos_erp (ya sincronizada en Supabase) ===== */
         async function cargarCatalogoClientesDocumentosErp() {
             try {
-                const { data, error } = await supabaseClient.from('ventas_documentos_erp').select('cliente_nombre');
+                const { data, error } = await supabaseClient.from('ventas_documentos_erp').select('cliente_nombre').limit(20000);
                 if (error) throw error;
                 const clientes = [...new Set((data || []).map(r => r.cliente_nombre).filter(Boolean))]
                     .sort((a, b) => a.localeCompare(b, 'es'));
@@ -2185,7 +2185,7 @@
             }
 
             try {
-                const { data, error } = await supabaseClient.from('ventas_documentos_erp').select('cliente_nombre');
+                const { data, error } = await supabaseClient.from('ventas_documentos_erp').select('cliente_nombre').limit(20000);
                 if (error) throw error;
                 const clientes = [...new Set((data || []).map(r => r.cliente_nombre).filter(Boolean))]
                     .sort((a, b) => a.localeCompare(b, 'es'));
