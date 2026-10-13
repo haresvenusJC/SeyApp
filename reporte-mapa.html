@@ -35,6 +35,12 @@
             margin-bottom: 40px;
         }
 
+        /* Deja siempre libre a la izquierda el espacio del menú (300 px + márgenes) para que el desplegable
+           nunca tape el contenido; en pantallas angostas el menú se encima como antes. */
+        @media (min-width: 1000px) {
+            /* Pegado al menú (sin centrar) y usando el resto del ancho disponible */
+            .container { margin-left: 320px; margin-right: auto; max-width: 1700px; }
+        }
         .header-bar {
             display: flex;
             justify-content: space-between;
@@ -59,6 +65,22 @@
         }
         button:hover { background: #551a8b; }
 
+        /* ===== Relieve 3D en botones: bisel (luz arriba, borde oscuro abajo), se elevan al pasar el cursor y se hunden al presionar ===== */
+        button {
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -3px 0 rgba(0,0,0,0.22), 0 4px 10px rgba(0,0,0,0.25);
+            transition: transform 0.12s ease, box-shadow 0.12s ease, background-color 0.15s ease;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -3px 0 rgba(0,0,0,0.22), 0 8px 16px rgba(0,0,0,0.3);
+        }
+        button:active {
+            transform: translateY(1px);
+            box-shadow: inset 0 3px 6px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.2);
+        }
+        button:disabled { transform: none; box-shadow: none; cursor: not-allowed; opacity: 0.6; }
+        /* Los botones transparentes (✕ de cerrar) quedan planos */
+        button[style*="background: none"], button[style*="background:none"] { box-shadow: none !important; transform: none !important; }
         select, input[type="date"] {
             padding: 9px 10px;
             border-radius: 4px;
@@ -203,23 +225,58 @@
         .leaflet-popup-content { font-size: 0.85rem; line-height: 1.4; }
         .leaflet-popup-content b { color: #6b21a8; }
 
-        /* Menú lateral deslizante (mismo comportamiento que el Back Office) */
+        /* Menú lateral deslizante (solo navegación; los filtros están en la pantalla principal) */
+        #menu-reportes { position: fixed; top: 0; left: 0; z-index: 1001; }
         #sidebar-menu {
             position: fixed;
-            top: 0;
-            left: -320px;
+            top: 62px;
+            left: 20px;
             width: 300px;
-            height: 100%;
-            background: #ffffff;
-            box-shadow: 4px 0 15px rgba(0,0,0,0.2);
-            transition: left 0.3s ease;
+            max-width: calc(100vw - 40px);
+            max-height: calc(100vh - 82px);
+            background: rgba(255, 255, 255, 0.9); /* blanco con un toque de transparencia */
+            -webkit-backdrop-filter: blur(10px);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
             z-index: 1000;
-            padding: 20px;
+            padding: 14px 16px 16px;
             box-sizing: border-box;
             overflow-y: auto;
+            display: none;
         }
-        #sidebar-menu.open { left: 0; }
-        .hamburger-btn {
+        #sidebar-menu.open { display: block; }
+        /* Barra de desplazamiento delgada y redondeada, en los colores de la app */
+        #sidebar-menu, .cfg-cuerpo {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(107, 33, 168, 0.55) transparent;
+        }
+        #sidebar-menu::-webkit-scrollbar, .cfg-cuerpo::-webkit-scrollbar { width: 8px; }
+        #sidebar-menu::-webkit-scrollbar-track, .cfg-cuerpo::-webkit-scrollbar-track {
+            background: transparent;
+            margin: 10px 0;
+        }
+        #sidebar-menu::-webkit-scrollbar-thumb, .cfg-cuerpo::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, rgba(230, 0, 126, 0.6), rgba(107, 33, 168, 0.7));
+            border-radius: 8px;
+        }
+        #sidebar-menu::-webkit-scrollbar-thumb:hover, .cfg-cuerpo::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #e6007e, #6b21a8);
+        }        .sb-grupo {
+            font-size: 0.72rem; font-weight: bold; letter-spacing: 0.8px; text-transform: uppercase;
+            color: #64748b; margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0;
+        }
+        .sb-grupo:first-child { margin-top: 0; }
+        .nav-rep {
+            display: block; width: 100%; text-align: left; margin-bottom: 8px;
+            background: #f3e8ff; color: #6b21a8; padding: 12px 14px; font-size: 0.95rem; border-radius: 8px;
+            border: 1px solid transparent; cursor: pointer; font-weight: bold;
+        }
+        .nav-rep:hover { background: #e9d5ff; transform: translateY(-1px); }
+        .nav-rep.activo { background: #6b21a8; color: #fff; box-shadow: inset 0 3px 6px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.6); transform: none; }
+        .nav-rep-config { background: #f1f5f9; color: #475569; }
+        .nav-rep-config:hover { background: #e2e8f0; }        .hamburger-btn {
             position: fixed;
             top: 20px;
             left: 20px;
@@ -232,56 +289,83 @@
             z-index: 1001;
             font-size: 18px;
             font-weight: bold;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -3px 0 rgba(0,0,0,0.25), 0 6px 14px rgba(0,0,0,0.3);
         }
-        .pivot-config-box {
+
+        /* Barra de filtros del mapa (en la pantalla principal) */
+        .filtros-mapa {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            align-items: flex-end;
             background: #f8f9fa;
             border: 1px solid #e2e8f0;
-            padding: 15px;
             border-radius: 8px;
-            margin-bottom: 15px;
+            padding: 14px 15px;
+            margin-bottom: 18px;
         }
-    </style>
+        .filtros-mapa label { font-size: 0.85rem; font-weight: bold; color: #444; display: block; margin-bottom: 5px; }
+        .filtros-mapa input[type="date"], .filtros-mapa select {
+            padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 15px; box-sizing: border-box; background: #fff;
+        }
+        .filtros-mapa select { min-width: 220px; }
+        .filtros-mapa .chips { display: flex; gap: 6px; }    </style>
 </head>
 <body>
 
-    <button class="hamburger-btn" id="btn-sandwich" onclick="toggleSidebar()">☰ Menú</button>
+    <div id="menu-reportes">
+        <button class="hamburger-btn" id="btn-sandwich" onclick="toggleSidebar()">☰ Reportes</button>
 
-    <div id="sidebar-menu" class="open">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-            <h3 style="margin:0; color:#6b21a8;">Panel del Mapa</h3>
-            <button onclick="toggleSidebar()" style="background:none; border:none; font-size:20px; color:#666; padding:0; cursor:pointer; width:auto; font-weight:bold;">✕</button>
-        </div>
+        <div id="sidebar-menu">
+            <button type="button" class="nav-rep" onclick="irA('')">🏠 Dashboard</button>
 
-        <div class="pivot-config-box">
-            <label style="font-weight:bold; color:#444; font-size:0.9rem; display:block; margin-bottom:8px;">Navegación</label>
-            <button onclick="window.location.href='backoffice.html'" style="width:100%; background:#6c757d;">📊 Volver al Dashboard / Back Office</button>
-        </div>
+            <div class="sb-grupo">Auditorías</div>
+            <button type="button" class="nav-rep" onclick="irA('tabla')">📊 Tabla dinámica</button>
+            <button type="button" class="nav-rep" onclick="irA('sucursal')">🏬 Reporte por Sucursal</button>
+            <button type="button" class="nav-rep activo">🗺️ Mapa de visitas</button>
 
-        <div class="pivot-config-box">
-            <label style="font-weight:bold; color:#444; font-size:0.9rem; display:block; margin-bottom:5px;">Rango de fechas del mapa</label>
-            <input type="date" id="f-desde" style="width:100%; margin-bottom:8px;">
-            <input type="date" id="f-hasta" style="width:100%; margin-bottom:10px;">
-            <button onclick="cargarReporte()" style="width:100%;">Actualizar mapa</button>
-            <div style="display:flex; gap:6px; margin-top:8px;">
-                <button class="btn-chip" onclick="rangoRapido(0)" style="flex:1;">Hoy</button>
-                <button class="btn-chip" onclick="rangoRapido(6)" style="flex:1;">7 días</button>
-                <button class="btn-chip" onclick="rangoRapido(29)" style="flex:1;">30 días</button>
-            </div>
-        </div>
+            <div class="sb-grupo">Pagos</div>
+            <button type="button" class="nav-rep" onclick="irA('pagos')">💰 Reporte de Pagos</button>
 
-        <div class="pivot-config-box">
-            <label style="font-weight:bold; color:#444; font-size:0.9rem; display:block; margin-bottom:5px;">Centrar mapa en</label>
-            <select id="select-dia-mapa" onchange="enfocarDiaEnMapa(this.value)" style="width:100%;">
-                <option value="">Todos los días del rango</option>
-            </select>
+            <div class="sb-grupo">Ventas</div>
+            <button type="button" class="nav-rep" onclick="irA('erp')">📦 Ventas ERP</button>
+            <button type="button" class="nav-rep" onclick="irA('docs')">🧾 Ventas Documentos (Folios)</button>
+
+            <div class="sb-grupo">Rentabilidad</div>
+            <button type="button" class="nav-rep" onclick="irA('rentabilidad')">📊 Analizar rentabilidad</button>
+
+            <div class="sb-grupo">Configuración</div>
+            <button type="button" class="nav-rep nav-rep-config" onclick="irA('configuracion')">⚙️ Configuración</button>
         </div>
     </div>
-
     <div class="container">
         <div class="header-bar">
             <h2>🗺️ Ubicaciones de Visitas por Día</h2>
-            <button onclick="window.location.href='backoffice.html'" style="background: #6c757d; padding: 8px 14px; font-size: 0.9rem;">⬅ Volver al Back Office</button>
+        </div>
+
+        <div class="filtros-mapa">
+            <div>
+                <label for="f-desde">Fecha inicio:</label>
+                <input type="date" id="f-desde">
+            </div>
+            <div>
+                <label for="f-hasta">Fecha fin:</label>
+                <input type="date" id="f-hasta">
+            </div>
+            <div>
+                <button onclick="cargarReporte()">Actualizar mapa</button>
+            </div>
+            <div class="chips">
+                <button class="btn-chip" onclick="rangoRapido(0)">Hoy</button>
+                <button class="btn-chip" onclick="rangoRapido(6)">7 días</button>
+                <button class="btn-chip" onclick="rangoRapido(29)">30 días</button>
+            </div>
+            <div>
+                <label for="select-dia-mapa">Centrar mapa en:</label>
+                <select id="select-dia-mapa" onchange="enfocarDiaEnMapa(this.value)">
+                    <option value="">Todos los días del rango</option>
+                </select>
+            </div>
         </div>
 
         <div class="resumen-bar" id="resumen-bar"></div>
@@ -289,7 +373,7 @@
         <div id="mapa"></div>
 
         <div class="map-tools">
-            <span style="font-size: 0.8rem; color: #666;">Cada pin abre un globo con el detalle y un enlace a Google Maps. Usa el menú ☰ de la izquierda para cambiar el rango de fechas o volver al Back Office.</span>
+            <span style="font-size: 0.8rem; color: #666;">Cada pin abre un globo con el detalle y un enlace a Google Maps. Cambia el rango de fechas arriba para actualizar el mapa.</span>
         </div>
 
         <div id="contenedor-dias">
@@ -325,9 +409,6 @@
         let gruposDia = [];          // [{ dia, fecha, color, visitas:[{...}], puntos:[{lat,lon}] }]
         let marcadoresPorDia = {};   // dia -> [L.marker]
 
-        function toggleSidebar() {
-            document.getElementById('sidebar-menu').classList.toggle('open');
-        }
 
         document.addEventListener('DOMContentLoaded', () => {
             // Toma el rango de fechas del menú del back office si viene en la URL (?desde=&hasta=)
@@ -339,9 +420,41 @@
             cargarReporte();
         });
 
+        // Menú desplegable: abre al pasar el cursor; un click lo deja fijo (útil en táctil) y otro click lo cierra.
+        let menuFijo = false;
+        let menuTimer = null;
+
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar-menu');
+            if (menuFijo) {
+                menuFijo = false;
+                sb.classList.remove('open');
+            } else {
+                menuFijo = true;
+                sb.classList.add('open');
+            }
+        }
+
+        (function iniciarMenu() {
+            const cont = document.getElementById('menu-reportes');
+            const sb = document.getElementById('sidebar-menu');
+            cont.addEventListener('mouseenter', () => { clearTimeout(menuTimer); sb.classList.add('open'); });
+            cont.addEventListener('mouseleave', () => {
+                if (menuFijo) return;
+                menuTimer = setTimeout(() => { if (!menuFijo) sb.classList.remove('open'); }, 250);
+            });
+            document.addEventListener('click', (e) => {
+                if (menuFijo && !cont.contains(e.target)) { menuFijo = false; sb.classList.remove('open'); }
+            });
+        })();
+
+        // Navega al Back Office, abriendo directamente la pantalla elegida
+        function irA(clave) {
+            window.location.href = 'backoffice.html' + (clave ? '?rep=' + encodeURIComponent(clave) : '');
+        }
         function inicializarMapa() {
             // Vista inicial aproximada (Monterrey, N.L.); se ajusta con fitBounds al cargar datos.
-            // Control de zoom a la derecha para no chocar con el botón ☰ del menú.
+            // Control de zoom a la derecha.
             map = L.map('mapa', { zoomControl: false }).setView([25.6866, -100.3161], 11);
             L.control.zoom({ position: 'topright' }).addTo(map);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
