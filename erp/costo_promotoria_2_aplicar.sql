@@ -1,4 +1,4 @@
--- APLICAR: guarda el costo de promotoria (Ricardo y Rigo, semanas cerradas martes-lunes) como cargo
+-- APLICAR: guarda el costo de promotoria (auditores no admin, semanas cerradas martes-lunes) como cargo
 -- "Costo de promotoría" por cadena y mes, en cargos_mensuales. Corre primero la vista previa.
 -- Se puede volver a correr cuando cierren mas semanas: reemplaza el monto de cada cadena/mes con el total actualizado.
 -- OJO: si ya habia un "Costo de promotoría" capturado a mano para esa cadena y mes, se reemplaza.
@@ -10,8 +10,8 @@ params as (
 ),
 -- Tarifas por visita: tarifas_cadena y, si falta la cadena, los valores por defecto de la app.
 tarifa_default (cadena, tarifa) as (values ('BENAVIDES', 60), ('DEL AHORRO', 80), ('HEB', 100)),
--- Usuarios considerados.
-usuarios_considerados (usuario) as (values ('ricardo'), ('rigo')),
+-- Usuarios considerados: todos los de usuarios_bo que no son admin (los auditores nuevos entran solos).
+usuarios_considerados (usuario) as (select lower(usuario) from public.usuarios_bo where rol <> 'admin'),
 -- Si el nombre de una cadena de sucursales no coincide con la cadena de clientes_cadenas (la que usa
 -- Analizar rentabilidad), escribe aqui la equivalencia, p. ej. ('DEL AHORRO', 'Farmacias del Ahorro').
 mapeo_manual (cadena_sucursal, cadena_cargo) as (values ('BENAVIDES', 'Farmacias Benavides'), ('HEB', 'Super Mercados Internacionales')),
@@ -63,7 +63,7 @@ insert into public.cargos_mensuales (cliente_nombre, periodo, cargo_tipo_id, mon
 select c.cadena_cargo, c.periodo,
        (select id from public.cargos_tipos where nombre = 'Costo de promotoría'),
        sum(c.monto),
-       'Promotoría (Ricardo y Rigo): ' || sum(c.visitas) || ' visitas, semanas martes-lunes cerradas al ' || (select cierre from params)
+       'Promotoría: ' || sum(c.visitas) || ' visitas, semanas martes-lunes cerradas al ' || (select cierre from params)
 from costo_mes c
 group by c.cadena_cargo, c.periodo
 on conflict (cliente_nombre, periodo, cargo_tipo_id)

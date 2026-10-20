@@ -1,4 +1,4 @@
--- VISTA PREVIA (solo lectura): costo de promotoria por cadena y mes, de Ricardo y Rigo, con semanas
+-- VISTA PREVIA (solo lectura): costo de promotoria por cadena y mes, de los auditores (usuarios no admin), con semanas
 -- cerradas (martes a lunes). Corre esto primero y revisa; no modifica nada.
 -- Revisa: "coincide_clientes_cadenas" en false => el nombre de la cadena no existe en clientes_cadenas
 -- y el cargo no saldria en Analizar rentabilidad (arreglalo en mapeo_manual); "cargo_existente" => ya hay un
@@ -10,8 +10,8 @@ params as (
 ),
 -- Tarifas por visita: tarifas_cadena y, si falta la cadena, los valores por defecto de la app.
 tarifa_default (cadena, tarifa) as (values ('BENAVIDES', 60), ('DEL AHORRO', 80), ('HEB', 100)),
--- Usuarios considerados.
-usuarios_considerados (usuario) as (values ('ricardo'), ('rigo')),
+-- Usuarios considerados: todos los de usuarios_bo que no son admin (los auditores nuevos entran solos).
+usuarios_considerados (usuario) as (select lower(usuario) from public.usuarios_bo where rol <> 'admin'),
 -- Si el nombre de una cadena de sucursales no coincide con la cadena de clientes_cadenas (la que usa
 -- Analizar rentabilidad), escribe aqui la equivalencia, p. ej. ('DEL AHORRO', 'Farmacias del Ahorro').
 mapeo_manual (cadena_sucursal, cadena_cargo) as (values ('BENAVIDES', 'Farmacias Benavides'), ('HEB', 'Super Mercados Internacionales')),
