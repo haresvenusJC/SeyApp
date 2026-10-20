@@ -2282,30 +2282,108 @@
             pgCalcularCorte();
         }
 
+        // Historial: todas las semanas (mar–lun) desde la primera visita. Las cerradas salen de lo guardado;
+        // las demás se calculan en vivo con las tarifas vigentes y se pueden cerrar en bloque.
         async function pgCargarHistorial() {
             const cont = document.getElementById('pg-historial');
             if (!cont) return;
+            cont.innerHTML = '<p style="color:#888; font-size:0.85rem;">Cargando historial…</p>';
             try {
-                const { data, error } = await supabaseClient.from('pagos_cortes')
-                    .select('semana_inicio, semana_fin, total, visitas, pagos_cortes_auditor(total, pagado)')
-                    .order('semana_inicio', { ascending: false }).limit(30);
-                if (error) throw error;
-                if (!data.length) { cont.innerHTML = '<p style="color:#888; font-size:0.85rem;">Aún no hay cortes cerrados.</p>'; return; }
-                let html = '<h4 style="margin: 0 0 8px; color:#6b21a8;">Cortes cerrados</h4><div class="dynamic-table-container"><table class="dynamic-pivot-table"><thead><tr><th>Semana (mar – lun)</th><th style="text-align:right;">Visitas</th><th style="text-align:right;">Total</th><th>Pagos</th><th style="text-align:right;">Pendiente</th><th></th></tr></thead><tbody>';
-                data.forEach(c => {
-                    const aud = c.pagos_cortes_auditor || [];
-                    const pagados = aud.filter(a => a.pagado).length;
-                    const pendiente = aud.filter(a => !a.pagado).reduce((x, a) => x + Number(a.total), 0);
-                    html += `<tr><td>${pgFecha(c.semana_inicio)} – ${pgFecha(c.semana_fin)}</td>
-                        <td style="text-align:right;">${c.visitas}</td><td style="text-align:right;">${pgMoney(c.total)}</td>
-                        <td>${pagados}/${aud.length} auditores${pagados === aud.length ? ' ✅' : ''}</td>
-                        <td style="text-align:right; color:${pendiente ? '#b91c1c' : '#16a34a'};">${pgMoney(pendiente)}</td>
-                        <td><button type="button" onclick="pgCalcularCorte('${c.semana_inicio}')" style="padding:3px 8px; font-size:0.75rem;">Abrir</button></td></tr>`;
+                const { data: primera, error: e1 } = await supabaseClient.from('visitas_auditoria')
+                    .select('created_at').order('created_at', { ascending: true }).limit(1);
+                if (e1) throw e1;
+                if (!primera.length) { cont.innerHTML = '<p style="color:#888; font-size:0.85rem;">Aún no hay visitas registradas.</p>'; return; }
+
+                const hoy = pgFmtDia(new Date());
+                const primerMartes = pgMartesDe(pgFmtDia(new Date(primera[0].created_at)));
+                const semanaActual = pgMartesDe(hoy);
+
+                const { data: cortes, error: e2 } = await supabaseClient.from('pagos_cortes')
+                    .select('semana_inicio, semana_fin, total, visitas, pagos_cortes_auditor(total, pagado)');
+                if (e2) throw e2;
+                const cerrados = {};
+                cortes.forEach(c => { cerrados[c.semana_inicio] = c; });
+
+                const items = await pgCargarVisitas(primerMartes, pgSumarDias(semanaActual, 6));
+                const porSemana = {};
+                items.forEach(e => { (porSemana[pgMartesDe(e.dia)] ??= []).push(e); });
+
+                const semanas = [];
+                for (let ini = primerMartes; ini <= semanaActual; ini = pgSumarDias(ini, 7)) {
+                    const fin = pgSumarDias(ini, 6);
+                    const c = cerrados[ini];
+                    const agg = pgAgregar(porSemana[ini] || []);
+                    semanas.push({ inicio: ini, fin, corte: c || null, agg,
+                        estado: c ? 'cerrada' : (ini === semanaActual ? 'en_curso' : 'sin_cerrar') });
+                }
+                window.pgSemanas = semanas;
+
+                const pendientes = semanas.filter(w => w.estado === 'sin_cerrar' && w.agg.visitas > 0);
+                const cerradas = semanas.filter(w => w.estado === 'cerrada');
+                const totalCerrado = cerradas.reduce((a, w) => a + Number(w.corte.total), 0);
+                let porPagar = 0;
+                cerradas.forEach(w => (w.corte.pagos_cortes_auditor || []).filter(x => !x.pagado).forEach(x => { porPagar += Number(x.total); }));
+
+                let html = `<h4 style="margin: 0 0 8px; color:#6b21a8;">Historial de cortes semanales</h4>
+                    <p style="font-size:0.82rem; color:#666; margin:0 0 10px;">${cerradas.length} cerrado${cerradas.length === 1 ? '' : 's'} · ${pgMoney(totalCerrado)} en cortes cerrados · ${pgMoney(porPagar)} pendiente de pago
+                    ${pendientes.length ? ` · <b style="color:#ca8a04;">${pendientes.length} semana${pendientes.length === 1 ? '' : 's'} terminada${pendientes.length === 1 ? '' : 's'} sin cerrar</b>` : ''}</p>`;
+                if (pendientes.length) {
+                    html += `<button type="button" onclick="pgCerrarPendientes()" style="background:#16a34a; margin-bottom:10px;">🔒 Cerrar las ${pendientes.length} semana${pendientes.length === 1 ? '' : 's'} pendiente${pendientes.length === 1 ? '' : 's'}</button>`;
+                }
+                html += '<div class="dynamic-table-container"><table class="dynamic-pivot-table"><thead><tr><th>Semana (mar – lun)</th><th>Estado</th><th style="text-align:right;">Visitas</th><th style="text-align:right;">Total</th><th>Pagos</th><th style="text-align:right;">Pendiente</th><th></th></tr></thead><tbody>';
+                semanas.slice().reverse().forEach(w => {
+                    let estado, pagos = '—', pend = '—', visitas = w.agg.visitas, total = w.agg.total;
+                    if (w.estado === 'cerrada') {
+                        const aud = w.corte.pagos_cortes_auditor || [];
+                        const pagados = aud.filter(x => x.pagado).length;
+                        const pe = aud.filter(x => !x.pagado).reduce((a, x) => a + Number(x.total), 0);
+                        estado = '🔒 Cerrada'; visitas = w.corte.visitas; total = Number(w.corte.total);
+                        pagos = `${pagados}/${aud.length}${pagados === aud.length ? ' ✅' : ''}`;
+                        pend = `<span style="color:${pe ? '#b91c1c' : '#16a34a'};">${pgMoney(pe)}</span>`;
+                    } else if (w.estado === 'en_curso') estado = '<span style="color:#ca8a04;">En curso</span>';
+                    else estado = '<span style="color:#b91c1c;">Sin cerrar</span>';
+                    html += `<tr><td>${pgFecha(w.inicio)} – ${pgFecha(w.fin)}</td><td>${estado}</td>
+                        <td style="text-align:right;">${visitas}</td><td style="text-align:right;">${pgMoney(total)}</td>
+                        <td>${pagos}</td><td style="text-align:right;">${pend}</td>
+                        <td><button type="button" onclick="pgCalcularCorte('${w.inicio}')" style="padding:3px 8px; font-size:0.75rem;">Abrir</button></td></tr>`;
                 });
                 cont.innerHTML = html + '</tbody></table></div>';
             } catch (err) {
                 cont.innerHTML = `<p style="color:#b91c1c; font-size:0.85rem;">${pgMsgError(err)}</p>`;
             }
+        }
+
+        // Guarda un corte congelado (corte + una fila por auditor). Si falla la segunda parte, deshace la primera.
+        async function pgGuardarCorte(inicio, fin, agg) {
+            const { data, error } = await supabaseClient.from('pagos_cortes').insert({
+                semana_inicio: inicio, semana_fin: fin, total: agg.total, visitas: agg.visitas,
+                dias: agg.dias, tarifas: { ...window.cacheTarifas },
+            }).select().single();
+            if (error) throw error;
+            const filas = agg.auditores.map(a => ({ corte_id: data.id, usuario: a.usuario, visitas: a.visitas, total: a.total, desglose: a.porCadena }));
+            const { error: e2 } = await supabaseClient.from('pagos_cortes_auditor').insert(filas);
+            if (e2) {
+                await supabaseClient.from('pagos_cortes').delete().eq('id', data.id);
+                throw e2;
+            }
+        }
+
+        // Cierra de una vez todas las semanas ya terminadas que aún no tienen corte guardado.
+        async function pgCerrarPendientes() {
+            const pend = (window.pgSemanas || []).filter(w => w.estado === 'sin_cerrar' && w.agg.visitas > 0);
+            if (!pend.length) return;
+            const sinTarifa = [...new Set(pend.flatMap(w => w.agg.sinTarifa))];
+            if (sinTarifa.length && !confirm(`Hay cadenas sin tarifa (${sinTarifa.join(', ')}); esas visitas se guardarán en $0.00. ¿Continuar?`)) return;
+            const total = pend.reduce((a, w) => a + w.agg.total, 0);
+            if (!confirm(`Se cerrarán ${pend.length} semana(s) terminada(s) con las tarifas vigentes, por un total de ${pgMoney(total)}. Quedarán con el pago pendiente de cada auditor. ¿Continuar?`)) return;
+            let hechas = 0;
+            try {
+                for (const w of pend) { await pgGuardarCorte(w.inicio, w.fin, w.agg); hechas++; }
+                alert(`Se cerraron ${hechas} semana(s).`);
+            } catch (err) {
+                alert(`Se cerraron ${hechas} semana(s) antes de un error. ` + pgMsgError(err));
+            }
+            pgCargarHistorial();
         }
 
         async function pgCalcularCorte(inicioParam) {
@@ -2394,17 +2472,7 @@
             if (c.agg.sinTarifa.length && !confirm(`Hay cadenas sin tarifa (${c.agg.sinTarifa.join(', ')}); se guardarán en $0.00. ¿Cerrar de todos modos?`)) return;
             if (!confirm(`Se cerrará y guardará el corte ${pgFecha(c.inicio)} – ${pgFecha(c.fin)} por ${pgMoney(c.agg.total)}. ¿Continuar?`)) return;
             try {
-                const { data, error } = await supabaseClient.from('pagos_cortes').insert({
-                    semana_inicio: c.inicio, semana_fin: c.fin, total: c.agg.total, visitas: c.agg.visitas,
-                    dias: c.agg.dias, tarifas: { ...window.cacheTarifas },
-                }).select().single();
-                if (error) throw error;
-                const filas = c.agg.auditores.map(a => ({ corte_id: data.id, usuario: a.usuario, visitas: a.visitas, total: a.total, desglose: a.porCadena }));
-                const { error: e2 } = await supabaseClient.from('pagos_cortes_auditor').insert(filas);
-                if (e2) {
-                    await supabaseClient.from('pagos_cortes').delete().eq('id', data.id);
-                    throw e2;
-                }
+                await pgGuardarCorte(c.inicio, c.fin, c.agg);
                 await pgCalcularCorte(c.inicio);
                 pgCargarHistorial();
             } catch (err) {
