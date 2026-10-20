@@ -646,6 +646,8 @@
 
         <div class="sb-grupo">Pagos</div>
         <button type="button" class="nav-rep" data-rep="pagos" onclick="abrirPantallaReporte('pagos')">💰 Reporte de Pagos</button>
+        <button type="button" class="nav-rep" data-rep="cortes-semanales" onclick="abrirPantallaReporte('cortes-semanales')">📅 Cortes semanales</button>
+        <button type="button" class="nav-rep" data-rep="costo-mensual" onclick="abrirPantallaReporte('costo-mensual')">🗓️ Costo por cadena (mes)</button>
 
         <div class="sb-grupo">Ventas</div>
         <button type="button" class="nav-rep" data-rep="erp" onclick="abrirPantallaReporte('erp')">📦 Ventas ERP</button>
@@ -788,6 +790,30 @@
                 <div class="rep-acciones">
                     <button onclick="generarReportePago()" style="background: #ca8a04;">💰 Generar corte de pago</button>
                     <button type="button" onclick="abrirConfiguracion('tarifas')" style="background: #64748b;">⚙️ Editar tarifas por cadena</button>
+                </div>
+            </div>
+
+            <!-- Cortes semanales de pago (martes a lunes) -->
+            <div class="rep-pantalla oculto" id="rep-cortes-semanales" data-titulo="📅 Cortes semanales">
+                <p class="sb-desc">Cada semana va de martes a lunes. Calcula el corte con la tarifa por cadena, ciérralo para dejarlo guardado y registra el pago de cada auditor. Requiere correr <code>erp/pagos_promotoria.sql</code> en Supabase una sola vez.</p>
+                <div class="rep-grid">
+                    <div class="rep-campo"><label class="sb-label">Cualquier día de la semana:</label><input type="date" id="pg-semana-fecha"></div>
+                </div>
+                <div class="rep-acciones">
+                    <button type="button" onclick="pgCalcularCorte()" style="background: #ca8a04;">📅 Ver corte de la semana</button>
+                    <button type="button" onclick="pgSemanaAnterior()" style="background: #64748b;">◀ Semana anterior</button>
+                </div>
+                <div id="pg-historial" style="margin-top: 16px;"></div>
+            </div>
+
+            <!-- Costo de promotoría asignado por cadena, por mes -->
+            <div class="rep-pantalla oculto" id="rep-costo-mensual" data-titulo="🗓️ Costo por cadena (mes)">
+                <p class="sb-desc">Acumulado al día del costo de promotoría asignado a cada cadena en el mes. Las semanas cerradas usan sus valores guardados; la semana en curso se calcula con la tarifa vigente. Una semana que cruza dos meses se reparte por día.</p>
+                <div class="rep-grid">
+                    <div class="rep-campo"><label class="sb-label">Mes:</label><input type="month" id="pg-mes"></div>
+                </div>
+                <div class="rep-acciones">
+                    <button type="button" onclick="pgGenerarMensual()" style="background: #ca8a04;">🗓️ Generar acumulado</button>
                 </div>
             </div>
 
@@ -1140,6 +1166,8 @@
             document.querySelectorAll('#sidebar-menu .nav-rep[data-rep]').forEach(b => b.classList.toggle('activo', b.dataset.rep === clave));
 
             if (clave === 'tabla') sincronizarFiltrosTabla();
+            if (clave === 'cortes-semanales') pgInicioPantalla();
+            if (clave === 'costo-mensual') pgInicioMensual();
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
@@ -2197,6 +2225,331 @@
             });
 
             cont.innerHTML = html;
+        }
+
+        /* ===== Pagos de promotoría: cortes semanales (martes a lunes), pago por auditor y costo mensual por cadena ===== */
+        const pgFmtDia = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const pgParseDia = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+        const pgSumarDias = (s, n) => { const d = pgParseDia(s); d.setDate(d.getDate() + n); return pgFmtDia(d); };
+        // Martes que abre la semana (martes a lunes) a la que pertenece la fecha dada.
+        const pgMartesDe = s => { const d = pgParseDia(s); d.setDate(d.getDate() - ((d.getDay() + 5) % 7)); return pgFmtDia(d); };
+        const pgMoney = n => '$' + Number(n || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const pgFecha = s => { if (!s) return '—'; const p = s.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+        const pgMsgError = err => 'Error: ' + err.message + (/relation|does not exist|schema cache/i.test(err.message) ? ' (¿falta correr erp/pagos_promotoria.sql en Supabase?)' : '');
+
+        // Visitas del rango con su cadena y tarifa. Se pide un día de más por lado y se filtra por día local.
+        async function pgCargarVisitas(inicio, fin) {
+            const data = await fetchPaginado(() => supabaseClient.from('visitas_auditoria').select('*')
+                .gte('created_at', `${pgSumarDias(inicio, -1)}T00:00:00`).lte('created_at', `${pgSumarDias(fin, 1)}T23:59:59`)
+                .order('created_at', { ascending: true }));
+            registrarVisitasEnMapa(data);
+            const mapaSuc = {};
+            cacheGlobalSucursales.forEach(s => { mapaSuc[s.id] = s; });
+            return data.map(v => {
+                const suc = mapaSuc[v.sucursal_id] || null;
+                const cadena = suc ? (suc.cadena || 'SIN CADENA') : 'SIN SUCURSAL';
+                const tarifa = window.cacheTarifas[cadena] !== undefined ? window.cacheTarifas[cadena] : 0;
+                return { visita: v, sucursal: suc, cadena, tarifa, dia: pgFmtDia(new Date(v.created_at)) };
+            }).filter(e => e.dia >= inicio && e.dia <= fin);
+        }
+
+        function pgAgregar(items) {
+            const porAuditor = {}, dias = {};
+            let total = 0;
+            items.forEach(e => {
+                const u = e.visita.usuario || 'Anónimo';
+                const a = porAuditor[u] ??= { usuario: u, visitas: 0, total: 0, porCadena: {} };
+                a.visitas++; a.total += e.tarifa;
+                const c = a.porCadena[e.cadena] ??= { visitas: 0, tarifa: e.tarifa, monto: 0 };
+                c.visitas++; c.monto += e.tarifa;
+                const d = dias[e.dia + '|' + e.cadena] ??= { fecha: e.dia, cadena: e.cadena, visitas: 0, monto: 0 };
+                d.visitas++; d.monto += e.tarifa;
+                total += e.tarifa;
+            });
+            return {
+                auditores: Object.values(porAuditor).sort((a, b) => b.total - a.total),
+                dias: Object.values(dias), total, visitas: items.length,
+                sinTarifa: [...new Set(items.filter(e => !e.tarifa).map(e => e.cadena))],
+            };
+        }
+
+        function pgInicioPantalla() {
+            const f = document.getElementById('pg-semana-fecha');
+            if (!f.value) f.value = pgMartesDe(pgFmtDia(new Date()));
+            pgCargarHistorial();
+        }
+
+        function pgSemanaAnterior() {
+            const f = document.getElementById('pg-semana-fecha');
+            f.value = pgSumarDias(pgMartesDe(f.value || pgFmtDia(new Date())), -7);
+            pgCalcularCorte();
+        }
+
+        async function pgCargarHistorial() {
+            const cont = document.getElementById('pg-historial');
+            if (!cont) return;
+            try {
+                const { data, error } = await supabaseClient.from('pagos_cortes')
+                    .select('semana_inicio, semana_fin, total, visitas, pagos_cortes_auditor(total, pagado)')
+                    .order('semana_inicio', { ascending: false }).limit(30);
+                if (error) throw error;
+                if (!data.length) { cont.innerHTML = '<p style="color:#888; font-size:0.85rem;">Aún no hay cortes cerrados.</p>'; return; }
+                let html = '<h4 style="margin: 0 0 8px; color:#6b21a8;">Cortes cerrados</h4><div class="dynamic-table-container"><table class="dynamic-pivot-table"><thead><tr><th>Semana (mar – lun)</th><th style="text-align:right;">Visitas</th><th style="text-align:right;">Total</th><th>Pagos</th><th style="text-align:right;">Pendiente</th><th></th></tr></thead><tbody>';
+                data.forEach(c => {
+                    const aud = c.pagos_cortes_auditor || [];
+                    const pagados = aud.filter(a => a.pagado).length;
+                    const pendiente = aud.filter(a => !a.pagado).reduce((x, a) => x + Number(a.total), 0);
+                    html += `<tr><td>${pgFecha(c.semana_inicio)} – ${pgFecha(c.semana_fin)}</td>
+                        <td style="text-align:right;">${c.visitas}</td><td style="text-align:right;">${pgMoney(c.total)}</td>
+                        <td>${pagados}/${aud.length} auditores${pagados === aud.length ? ' ✅' : ''}</td>
+                        <td style="text-align:right; color:${pendiente ? '#b91c1c' : '#16a34a'};">${pgMoney(pendiente)}</td>
+                        <td><button type="button" onclick="pgCalcularCorte('${c.semana_inicio}')" style="padding:3px 8px; font-size:0.75rem;">Abrir</button></td></tr>`;
+                });
+                cont.innerHTML = html + '</tbody></table></div>';
+            } catch (err) {
+                cont.innerHTML = `<p style="color:#b91c1c; font-size:0.85rem;">${pgMsgError(err)}</p>`;
+            }
+        }
+
+        async function pgCalcularCorte(inicioParam) {
+            try {
+                const base = inicioParam || document.getElementById('pg-semana-fecha').value;
+                if (!base) { alert('Elige un día de la semana.'); return; }
+                const inicio = pgMartesDe(base), fin = pgSumarDias(inicio, 6);
+                document.getElementById('pg-semana-fecha').value = inicio;
+
+                const { data: corte, error } = await supabaseClient.from('pagos_cortes')
+                    .select('*, pagos_cortes_auditor(*)').eq('semana_inicio', inicio).maybeSingle();
+                if (error) throw error;
+
+                let agg, items = null;
+                if (corte) {
+                    const auds = (corte.pagos_cortes_auditor || []).slice().sort((a, b) => b.total - a.total);
+                    agg = { auditores: auds.map(a => ({ id: a.id, usuario: a.usuario, visitas: a.visitas, total: Number(a.total), porCadena: a.desglose || {}, pagado: a.pagado, pagado_en: a.pagado_en, forma_pago: a.forma_pago, referencia: a.referencia })),
+                        dias: corte.dias || [], total: Number(corte.total), visitas: corte.visitas, sinTarifa: [] };
+                } else {
+                    items = await pgCargarVisitas(inicio, fin);
+                    agg = pgAgregar(items);
+                }
+                window.pgCorteActual = { inicio, fin, agg, guardado: !!corte, corteId: corte ? corte.id : null };
+                pgRenderCorte();
+                setTimeout(() => { const r = document.getElementById('resultado-dinamico-container'); if (r) r.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+            } catch (err) {
+                alert(pgMsgError(err));
+                console.error(err);
+            }
+        }
+
+        function pgRenderCorte() {
+            const c = window.pgCorteActual;
+            const agg = c.agg;
+            mostrarResultadoReporte();
+            const cont = document.getElementById('resultado-dinamico-container');
+
+            const porCadena = {};
+            agg.dias.forEach(d => { const x = porCadena[d.cadena] ??= { visitas: 0, monto: 0 }; x.visitas += d.visitas; x.monto += d.monto; });
+            const pagados = agg.auditores.filter(a => a.pagado).length;
+            const pendiente = agg.auditores.filter(a => !a.pagado).reduce((x, a) => x + a.total, 0);
+
+            let html = barraResultadoReporte('📅 Corte semanal');
+            html += `<p style="font-size:0.85rem; color:#666; margin-top:0;">Semana <b>martes ${pgFecha(c.inicio)} – lunes ${pgFecha(c.fin)}</b> ·
+                ${c.guardado ? '<b style="color:#16a34a;">🔒 Cerrado</b> (valores guardados)' : '<b style="color:#ca8a04;">Abierto</b> (vista previa con las tarifas vigentes)'}</p>`;
+            if (agg.sinTarifa.length) {
+                html += `<p style="background:#fef2f2; color:#b91c1c; padding:8px 12px; border-radius:6px; font-size:0.82rem;">⚠️ Sin tarifa configurada (se calculan en $0.00): <b>${agg.sinTarifa.join(', ')}</b>. Configúralas en ⚙️ Configuración → Tarifas de pagos antes de cerrar el corte.</p>`;
+            }
+            html += `<div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+                <div class="kpi-card" style="flex:1; min-width:160px;"><h4>Total del corte</h4><p class="value" style="color:#16a34a;">${pgMoney(agg.total)}</p></div>
+                <div class="kpi-card" style="flex:1; min-width:160px;"><h4>Visitas</h4><p class="value">${agg.visitas}</p></div>
+                ${c.guardado ? `<div class="kpi-card" style="flex:1; min-width:160px;"><h4>Pagados</h4><p class="value">${pagados}/${agg.auditores.length}</p></div>
+                <div class="kpi-card" style="flex:1; min-width:160px;"><h4>Pendiente de pago</h4><p class="value" style="color:${pendiente ? '#b91c1c' : '#16a34a'};">${pgMoney(pendiente)}</p></div>` : ''}
+            </div>`;
+
+            html += '<h4 style="margin:6px 0 8px;">Pago por auditor</h4><div class="dynamic-table-container"><table class="dynamic-pivot-table" id="tabla-exportable"><thead><tr><th>Auditor</th><th>Desglose por cadena</th><th style="text-align:right;">Visitas</th><th style="text-align:right;">Total</th>' + (c.guardado ? '<th>Pago</th>' : '') + '</tr></thead><tbody>';
+            agg.auditores.forEach(a => {
+                const desglose = Object.keys(a.porCadena).sort().map(k => `${k}: ${a.porCadena[k].visitas} × ${pgMoney(a.porCadena[k].tarifa)}`).join(' · ');
+                let pago = '';
+                if (c.guardado) {
+                    pago = a.pagado
+                        ? `<td style="font-size:0.8rem;">✅ ${pgFecha(a.pagado_en)} · ${a.forma_pago || ''}${a.referencia ? ' · ' + a.referencia : ''} <button type="button" onclick="pgDesmarcarPagado(${a.id})" style="background:#6c757d; padding:2px 7px; font-size:0.7rem;">Deshacer</button></td>`
+                        : `<td><button type="button" onclick="pgMarcarPagado(${a.id})" style="background:#16a34a; padding:4px 9px; font-size:0.78rem;">💵 Marcar pagado</button></td>`;
+                }
+                html += `<tr><td style="font-weight:bold;">${a.usuario}</td><td style="font-size:0.8rem; color:#555;">${desglose}</td>
+                    <td style="text-align:right;">${a.visitas}</td><td style="text-align:right; font-weight:bold; color:#16a34a;">${pgMoney(a.total)}</td>${pago}</tr>`;
+            });
+            html += `<tr style="background:#6b21a8; color:#fff; font-weight:bold;"><td colspan="3" style="text-align:right;">TOTAL DEL CORTE</td><td style="text-align:right;">${pgMoney(agg.total)}</td>${c.guardado ? '<td></td>' : ''}</tr></tbody></table></div>`;
+
+            html += '<h4 style="margin:18px 0 8px;">Total asignado por cadena</h4><div class="dynamic-table-container"><table class="dynamic-pivot-table"><thead><tr><th>Cadena</th><th style="text-align:right;">Visitas</th><th style="text-align:right;">Costo asignado</th></tr></thead><tbody>';
+            Object.keys(porCadena).sort().forEach(k => {
+                html += `<tr><td>${k}</td><td style="text-align:right;">${porCadena[k].visitas}</td><td style="text-align:right; font-weight:bold;">${pgMoney(porCadena[k].monto)}</td></tr>`;
+            });
+            html += `<tr style="background:#6b21a8; color:#fff; font-weight:bold;"><td colspan="2" style="text-align:right;">TOTAL ASIGNADO</td><td style="text-align:right;">${pgMoney(agg.total)}</td></tr></tbody></table></div>`;
+
+            html += '<div class="rep-acciones">';
+            if (c.guardado) html += '<button type="button" onclick="pgReabrirCorte()" style="background:#dc2626;">↩️ Reabrir corte (borra pagos registrados)</button>';
+            else if (agg.visitas) html += '<button type="button" onclick="pgCerrarCorte()" style="background:#16a34a;">🔒 Cerrar y guardar corte</button>';
+            html += '<button type="button" onclick="window.print()" style="background:#64748b;">🖨️ Imprimir / PDF</button></div>';
+            cont.innerHTML = html;
+        }
+
+        async function pgCerrarCorte() {
+            const c = window.pgCorteActual;
+            if (!c || c.guardado) return;
+            if (c.agg.sinTarifa.length && !confirm(`Hay cadenas sin tarifa (${c.agg.sinTarifa.join(', ')}); se guardarán en $0.00. ¿Cerrar de todos modos?`)) return;
+            if (!confirm(`Se cerrará y guardará el corte ${pgFecha(c.inicio)} – ${pgFecha(c.fin)} por ${pgMoney(c.agg.total)}. ¿Continuar?`)) return;
+            try {
+                const { data, error } = await supabaseClient.from('pagos_cortes').insert({
+                    semana_inicio: c.inicio, semana_fin: c.fin, total: c.agg.total, visitas: c.agg.visitas,
+                    dias: c.agg.dias, tarifas: { ...window.cacheTarifas },
+                }).select().single();
+                if (error) throw error;
+                const filas = c.agg.auditores.map(a => ({ corte_id: data.id, usuario: a.usuario, visitas: a.visitas, total: a.total, desglose: a.porCadena }));
+                const { error: e2 } = await supabaseClient.from('pagos_cortes_auditor').insert(filas);
+                if (e2) {
+                    await supabaseClient.from('pagos_cortes').delete().eq('id', data.id);
+                    throw e2;
+                }
+                await pgCalcularCorte(c.inicio);
+                pgCargarHistorial();
+            } catch (err) {
+                alert('No se pudo cerrar el corte. ' + pgMsgError(err));
+            }
+        }
+
+        async function pgReabrirCorte() {
+            const c = window.pgCorteActual;
+            if (!c || !c.guardado) return;
+            if (!confirm('Se borrará el corte guardado y los pagos registrados de esa semana. ¿Reabrir?')) return;
+            try {
+                const { error } = await supabaseClient.from('pagos_cortes').delete().eq('id', c.corteId);
+                if (error) throw error;
+                await pgCalcularCorte(c.inicio);
+                pgCargarHistorial();
+            } catch (err) {
+                alert(pgMsgError(err));
+            }
+        }
+
+        async function pgMarcarPagado(id) {
+            const a = window.pgCorteActual.agg.auditores.find(x => x.id === id);
+            const fecha = prompt(`Fecha de pago a ${a.usuario} (AAAA-MM-DD):`, pgFmtDia(new Date()));
+            if (!fecha) return;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) { alert('Usa el formato AAAA-MM-DD.'); return; }
+            const forma = prompt('Forma de pago (ej. Transferencia, Efectivo):', 'Transferencia');
+            if (forma === null) return;
+            const ref = prompt('Referencia o nota (opcional):', '');
+            try {
+                const { error } = await supabaseClient.from('pagos_cortes_auditor')
+                    .update({ pagado: true, pagado_en: fecha, forma_pago: forma.trim() || null, referencia: (ref || '').trim() || null }).eq('id', id);
+                if (error) throw error;
+                await pgCalcularCorte(window.pgCorteActual.inicio);
+                pgCargarHistorial();
+            } catch (err) {
+                alert(pgMsgError(err));
+            }
+        }
+
+        async function pgDesmarcarPagado(id) {
+            if (!confirm('¿Quitar el registro de pago?')) return;
+            try {
+                const { error } = await supabaseClient.from('pagos_cortes_auditor')
+                    .update({ pagado: false, pagado_en: null, forma_pago: null, referencia: null }).eq('id', id);
+                if (error) throw error;
+                await pgCalcularCorte(window.pgCorteActual.inicio);
+                pgCargarHistorial();
+            } catch (err) {
+                alert(pgMsgError(err));
+            }
+        }
+
+        /* ----- Costo mensual por cadena: acumulado al día, por semana (mar–lun), repartido por día entre meses ----- */
+        function pgInicioMensual() {
+            const m = document.getElementById('pg-mes');
+            if (!m.value) m.value = pgFmtDia(new Date()).slice(0, 7);
+        }
+
+        async function pgGenerarMensual() {
+            try {
+                const mes = document.getElementById('pg-mes').value;
+                if (!mes) { alert('Selecciona el mes.'); return; }
+                const [y, m] = mes.split('-').map(Number);
+                const primero = `${mes}-01`, ultimo = pgFmtDia(new Date(y, m, 0));
+                const hoy = pgFmtDia(new Date());
+                const primerMartes = pgMartesDe(primero), ultimoMartes = pgMartesDe(ultimo);
+
+                const { data: cortes, error } = await supabaseClient.from('pagos_cortes')
+                    .select('semana_inicio, dias').gte('semana_inicio', primerMartes).lte('semana_inicio', ultimoMartes);
+                if (error) throw error;
+                const cerradas = {};
+                cortes.forEach(c => { cerradas[c.semana_inicio] = c; });
+
+                const vivos = pgAgregar(await pgCargarVisitas(primerMartes, pgSumarDias(ultimoMartes, 6))).dias;
+
+                const semanas = [], cadenas = new Set(), porDia = {};
+                for (let s = primerMartes; s <= ultimoMartes; s = pgSumarDias(s, 7)) {
+                    const fin = pgSumarDias(s, 6);
+                    const cerrada = cerradas[s];
+                    const dias = cerrada ? cerrada.dias : vivos.filter(d => d.fecha >= s && d.fecha <= fin);
+                    const enMes = dias.filter(d => d.fecha >= primero && d.fecha <= ultimo);
+                    const porCadena = {};
+                    enMes.forEach(d => {
+                        cadenas.add(d.cadena);
+                        porCadena[d.cadena] = (porCadena[d.cadena] || 0) + d.monto;
+                        const x = porDia[d.fecha] ??= {};
+                        x[d.cadena] = (x[d.cadena] || 0) + d.monto;
+                    });
+                    semanas.push({ inicio: s, fin, cerrada: !!cerrada, porCadena,
+                        totalMes: enMes.reduce((a, d) => a + d.monto, 0), totalSemana: dias.reduce((a, d) => a + d.monto, 0) });
+                }
+                const listaCadenas = [...cadenas].sort();
+                const totalCadena = {};
+                listaCadenas.forEach(c => { totalCadena[c] = semanas.reduce((a, s) => a + (s.porCadena[c] || 0), 0); });
+                const acumulado = semanas.reduce((a, s) => a + s.totalMes, 0);
+
+                mostrarResultadoReporte();
+                const cont = document.getElementById('resultado-dinamico-container');
+                let html = barraResultadoReporte('🗓️ Costo de promotoría por cadena');
+                html += `<p style="font-size:0.85rem; color:#666; margin-top:0;">Mes <b>${mes}</b> · acumulado al día <b>${pgFecha(hoy)}</b> ·
+                    ${semanas.filter(s => s.cerrada).length} semana(s) cerrada(s) 🔒, ${semanas.filter(s => !s.cerrada).length} abierta(s)</p>`;
+                html += `<div style="display:flex; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
+                    <div class="kpi-card" style="flex:1; min-width:170px;"><h4>Acumulado del mes</h4><p class="value" style="color:#16a34a;">${pgMoney(acumulado)}</p></div>
+                    ${listaCadenas.map(c => `<div class="kpi-card" style="flex:1; min-width:150px;"><h4>${c}</h4><p class="value">${pgMoney(totalCadena[c])}</p></div>`).join('')}
+                </div>`;
+
+                html += '<h4 style="margin:6px 0 8px;">Total asignado por corte semanal</h4><div class="dynamic-table-container"><table class="dynamic-pivot-table" id="tabla-exportable"><thead><tr><th>Semana (mar – lun)</th><th>Estado</th>';
+                listaCadenas.forEach(c => { html += `<th style="text-align:right;">${c}</th>`; });
+                html += '<th style="text-align:right;">Total en el mes</th></tr></thead><tbody>';
+                semanas.forEach(s => {
+                    const nota = Math.abs(s.totalSemana - s.totalMes) > 0.005 ? `<br><span style="font-size:0.72rem; color:#888;">semana completa ${pgMoney(s.totalSemana)}; el resto cae en otro mes</span>` : '';
+                    html += `<tr><td>${pgFecha(s.inicio)} – ${pgFecha(s.fin)}${nota}</td><td>${s.cerrada ? '🔒 Cerrada' : 'Abierta'}</td>`;
+                    listaCadenas.forEach(c => { html += `<td style="text-align:right;">${pgMoney(s.porCadena[c] || 0)}</td>`; });
+                    html += `<td style="text-align:right; font-weight:bold;">${pgMoney(s.totalMes)}</td></tr>`;
+                });
+                html += '<tr style="background:#6b21a8; color:#fff; font-weight:bold;"><td colspan="2" style="text-align:right;">ACUMULADO DEL MES</td>';
+                listaCadenas.forEach(c => { html += `<td style="text-align:right;">${pgMoney(totalCadena[c])}</td>`; });
+                html += `<td style="text-align:right;">${pgMoney(acumulado)}</td></tr></tbody></table></div>`;
+
+                // Acumulado día por día
+                html += '<details style="margin-top:16px;"><summary style="cursor:pointer; font-weight:bold; color:#6b21a8;">Acumulado día por día</summary><div class="dynamic-table-container"><table class="dynamic-pivot-table"><thead><tr><th>Día</th>';
+                listaCadenas.forEach(c => { html += `<th style="text-align:right;">${c}</th>`; });
+                html += '<th style="text-align:right;">Del día</th><th style="text-align:right;">Acumulado</th></tr></thead><tbody>';
+                let corrido = 0;
+                const tope = hoy < ultimo ? hoy : ultimo;
+                for (let d = primero; d <= tope; d = pgSumarDias(d, 1)) {
+                    const x = porDia[d] || {};
+                    const delDia = Object.values(x).reduce((a, v) => a + v, 0);
+                    corrido += delDia;
+                    html += `<tr><td>${pgFecha(d)}</td>`;
+                    listaCadenas.forEach(c => { html += `<td style="text-align:right;">${x[c] ? pgMoney(x[c]) : '—'}</td>`; });
+                    html += `<td style="text-align:right;">${delDia ? pgMoney(delDia) : '—'}</td><td style="text-align:right; font-weight:bold;">${pgMoney(corrido)}</td></tr>`;
+                }
+                html += '</tbody></table></div></details>';
+                html += '<div class="rep-acciones"><button type="button" onclick="window.print()" style="background:#64748b;">🖨️ Imprimir / PDF</button></div>';
+                cont.innerHTML = html;
+                setTimeout(() => cont.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+            } catch (err) {
+                alert(pgMsgError(err));
+                console.error(err);
+            }
         }
 
         // Clientes que no deben aparecer en ningun selector/listado (cuentas internas, de prueba, etc.)
