@@ -1037,13 +1037,8 @@
 
             try {
                 // Verifica credenciales con la funcion RPC (la tabla usuarios_bo no es legible con la llave anon)
-                let { data: filas, error } = await supabaseClient
+                const { data: filas, error } = await supabaseClient
                     .rpc('login_usuario_bo', { p_usuario: usuarioInput, p_password: passwordInput });
-                if (error && error.code === 'PGRST202') {
-                    // La funcion aun no existe en Supabase (falta correr seguridad_1_login_rpc.sql): consulta directa
-                    ({ data: filas, error } = await supabaseClient.from('usuarios_bo').select('*')
-                        .eq('usuario', usuarioInput).eq('password', passwordInput));
-                }
 
                 if (error) throw error;
                 const data = filas && filas.length ? filas[0] : null;
