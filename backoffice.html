@@ -589,7 +589,7 @@
         </div>
     </div>
 
-    <!-- MODAL DE CONFIGURACIÓN (cargos, diccionario, cadenas, tarifas) -->
+    <!-- MODAL DE CONFIGURACIÓN (diccionario, cadenas, tarifas) -->
     <div id="modal-config" class="oculto" onclick="if(event.target===this) cerrarConfiguracion()">
         <div class="cfg-caja">
             <div class="cfg-encabezado">
@@ -597,31 +597,12 @@
                 <button type="button" onclick="cerrarConfiguracion()" style="background: #6c757d; padding: 6px 12px;">✕ Cerrar</button>
             </div>
             <div class="cfg-tabs">
-                <button type="button" class="cfg-tab" data-tab="captura" onclick="cambiarTabConfig('captura')">📝 Cargos del mes</button>
                 <button type="button" class="cfg-tab" data-tab="dicc" onclick="cambiarTabConfig('dicc')">📖 Diccionario</button>
                 <button type="button" class="cfg-tab" data-tab="cadenas" onclick="cambiarTabConfig('cadenas')">🏷️ Cadenas</button>
                 <button type="button" class="cfg-tab" data-tab="tarifas" onclick="cambiarTabConfig('tarifas')">💰 Tarifas de pagos</button>
             </div>
             <div class="cfg-cuerpo">
-                <div class="cfg-pane" id="cfg-pane-captura">
-                        <label class="sb-label">Cliente:</label>
-                        <select id="rent-cap-cliente" style="width: 100%; margin-bottom: 8px;">
-                            <option value="">Selecciona un cliente…</option>
-                        </select>
-
-                        <label class="sb-label">Mes:</label>
-                        <input type="month" id="rent-cap-mes" style="width: 100%; margin-bottom: 10px;">
-
-                        <div id="rent-cap-tipos-lista"><p style="color:#888; font-size:0.8rem;">Cargando categorías…</p></div>
-
-                        <button type="button" onclick="agregarTipoCargo()" style="background: #64748b; width: 100%; font-size: 0.85rem; padding: 8px; margin-top: 4px;">+ Agregar categoría de cargo</button>
-
-                        <label style="font-weight: bold; color: #444; font-size: 0.9rem; display: block; margin: 10px 0 5px;">Notas (opcional):</label>
-                        <textarea id="rent-cap-notas" rows="2" style="width: 100%; margin-bottom: 8px;"></textarea>
-
-                        <button onclick="guardarCargosMes()" style="background: #16a34a; width: 100%;">💾 Guardar cargos del mes</button>
-                </div>
-                <div class="cfg-pane oculto" id="cfg-pane-dicc">
+                <div class="cfg-pane" id="cfg-pane-dicc">
                         <p class="sb-desc">Registra cómo le llama cada cliente a cada categoría, para no confundirte al leer sus facturas (esto es solo referencia).</p>
                         <select id="rent-dicc-cliente" style="width: 100%; margin-bottom: 8px;">
                             <option value="">Selecciona un cliente…</option>
@@ -672,7 +653,7 @@
 
         <div class="sb-grupo">Rentabilidad</div>
         <button type="button" class="nav-rep" data-rep="rentabilidad" onclick="abrirPantallaReporte('rentabilidad')">📊 Analizar rentabilidad</button>
-        <button type="button" class="nav-rep" onclick="abrirConfiguracion('captura')">📝 Cargos retail</button>
+        <button type="button" class="nav-rep" data-rep="cargos-retail" onclick="abrirPantallaReporte('cargos-retail')">📝 Cargos retail</button>
 
         <div class="sb-grupo">Configuración</div>
         <button type="button" class="nav-rep nav-rep-config" onclick="abrirConfiguracion()">⚙️ Configuración</button>
@@ -844,7 +825,7 @@
 
             <!-- Análisis de rentabilidad -->
             <div class="rep-pantalla oculto" id="rep-rentabilidad" data-titulo="📊 Analizar rentabilidad">
-                <p class="sb-desc">Ventas contra cargos capturados, por cliente o cadena. Los cargos, el diccionario y las cadenas se administran en ⚙️ Configuración.</p>
+                <p class="sb-desc">Ventas contra cargos capturados, por cliente o cadena. Los cargos se capturan en 📝 Cargos retail; el diccionario y las cadenas se administran en ⚙️ Configuración.</p>
                 <div class="rep-grid">
                     <div class="rep-campo"><label class="sb-label">Cliente o cadena:</label>
                         <select id="rent-an-cliente"><option value="">Todos (suma general)</option></select></div>
@@ -853,8 +834,27 @@
                 </div>
                 <div class="rep-acciones">
                     <button onclick="generarAnalisisRentabilidad()" style="background: #be185d;">📊 Generar análisis</button>
-                    <button type="button" onclick="abrirConfiguracion('captura')" style="background: #64748b;">⚙️ Configuración de cargos</button>
+                    <button type="button" onclick="abrirPantallaReporte('cargos-retail')" style="background: #64748b;">📝 Capturar cargos retail</button>
                 </div>
+            </div>
+
+            <!-- Captura de cargos retail -->
+            <div class="rep-pantalla oculto" id="rep-cargos-retail" data-titulo="📝 Cargos retail">
+                <p class="sb-desc">Captura los cargos del mes por cliente o cadena. Si ya hay cargos guardados para ese mes, se cargan para que los corrijas. Dejar un monto vacío no borra el que ya existe; para quitarlo usa ✕ en el historial.</p>
+                <div class="rep-grid">
+                    <div class="rep-campo"><label class="sb-label">Cliente o cadena:</label>
+                        <select id="rent-cap-cliente" onchange="alCambiarCapturaCargos()"><option value="">Selecciona un cliente o cadena…</option></select></div>
+                    <div class="rep-campo"><label class="sb-label">Mes:</label>
+                        <input type="month" id="rent-cap-mes" onchange="alCambiarCapturaCargos()"></div>
+                </div>
+                <div id="rent-cap-tipos-lista" class="rep-grid" style="margin-top: 10px;"><p style="color:#888; font-size:0.8rem;">Cargando categorías…</p></div>
+                <div class="rep-campo" style="margin-top: 10px;"><label class="sb-label">Notas (opcional):</label>
+                    <textarea id="rent-cap-notas" rows="2" style="width: 100%;"></textarea></div>
+                <div class="rep-acciones">
+                    <button type="button" onclick="guardarCargosMes()" style="background: #16a34a;">💾 Guardar cargos del mes</button>
+                    <button type="button" onclick="agregarTipoCargo()" style="background: #64748b;">+ Agregar categoría de cargo</button>
+                </div>
+                <div id="rent-cap-historial" style="margin-top: 16px;"></div>
             </div>
         </div>
         <!-- Resultado del reporte: se muestra debajo de los filtros -->
@@ -1267,7 +1267,6 @@
             // Si se llegó desde otra página (p. ej. el mapa) con ?rep=..., abre esa pantalla directamente
             const repParam = new URLSearchParams(location.search).get('rep');
             if (repParam === 'configuracion') abrirConfiguracion();
-            else if (repParam === 'cargos-retail') abrirConfiguracion('captura');
             else if (repParam && document.getElementById('rep-' + repParam)) abrirPantallaReporte(repParam);
         }
 
@@ -2645,8 +2644,8 @@
             }
             let html = '';
             window.catalogoCargosTipos.forEach(t => {
-                html += `<label style="font-weight: bold; color: #444; font-size: 0.85rem; display: block; margin-bottom: 3px;">${t.nombre}:</label>
-                         <input type="number" step="0.01" class="rent-cap-input" data-tipo-id="${t.id}" placeholder="$0.00" style="width: 100%; margin-bottom: 8px;">`;
+                html += `<div class="rep-campo"><label class="sb-label">${t.nombre}:</label>
+                         <input type="number" step="0.01" class="rent-cap-input" data-tipo-id="${t.id}" placeholder="$0.00"></div>`;
             });
             cont.innerHTML = html;
         }
@@ -2698,11 +2697,83 @@
                 if (error) throw error;
 
                 alert('Cargos guardados correctamente.');
-                document.querySelectorAll('.rent-cap-input').forEach(inp => inp.value = '');
-                document.getElementById('rent-cap-notas').value = '';
+                await alCambiarCapturaCargos();
+                cargarHistorialCargos();
             } catch (err) {
                 alert('Error al guardar los cargos: ' + err.message);
                 console.error(err);
+            }
+        }
+
+        // Al elegir cliente/mes: precarga los montos ya guardados (para corregirlos) y muestra el historial
+        async function alCambiarCapturaCargos() {
+            const cliente = document.getElementById('rent-cap-cliente').value;
+            const mes = document.getElementById('rent-cap-mes').value;
+            const inputs = document.querySelectorAll('.rent-cap-input');
+            inputs.forEach(inp => inp.value = '');
+            document.getElementById('rent-cap-notas').value = '';
+            cargarHistorialCargos();
+            if (!cliente || !mes) return;
+            try {
+                const { data, error } = await supabaseClient.from('cargos_mensuales')
+                    .select('cargo_tipo_id, monto, notas').eq('cliente_nombre', cliente).eq('periodo', `${mes}-01`);
+                if (error) throw error;
+                (data || []).forEach(r => {
+                    const inp = document.querySelector(`.rent-cap-input[data-tipo-id="${r.cargo_tipo_id}"]`);
+                    if (inp) inp.value = r.monto;
+                    if (r.notas) document.getElementById('rent-cap-notas').value = r.notas;
+                });
+            } catch (err) {
+                console.warn('No se pudieron cargar los cargos guardados:', err.message);
+            }
+        }
+
+        // Historial de cargos ya capturados del cliente/cadena seleccionado, agrupado por mes
+        async function cargarHistorialCargos() {
+            const fmtMxn = n => Number(n || 0).toLocaleString('es-MX', { style: 'currency', currency: 'MXN' });
+            const cont = document.getElementById('rent-cap-historial');
+            if (!cont) return;
+            const cliente = document.getElementById('rent-cap-cliente').value;
+            if (!cliente) { cont.innerHTML = ''; return; }
+            try {
+                const { data, error } = await supabaseClient.from('cargos_mensuales')
+                    .select('id, periodo, monto, cargo_tipo_id').eq('cliente_nombre', cliente).order('periodo', { ascending: false });
+                if (error) throw error;
+                if (!data || !data.length) { cont.innerHTML = '<p style="color:#888; font-size:0.85rem;">Sin cargos capturados todavía para este cliente.</p>'; return; }
+                const nombres = {};
+                window.catalogoCargosTipos.forEach(t => { nombres[t.id] = t.nombre; });
+                const porMes = {};
+                data.forEach(r => { (porMes[r.periodo] ??= []).push(r); });
+                let html = `<h4 style="margin: 0 0 8px; color:#6b21a8;">Cargos capturados de ${cliente}</h4>`;
+                Object.keys(porMes).forEach(periodo => {
+                    const filas = porMes[periodo];
+                    const total = filas.reduce((a, r) => a + Number(r.monto), 0);
+                    const mesTxt = periodo.slice(0, 7);
+                    html += `<div style="border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; margin-bottom:8px;">
+                        <div style="display:flex; justify-content:space-between; font-weight:bold;">
+                            <a href="#" onclick="event.preventDefault(); document.getElementById('rent-cap-mes').value='${mesTxt}'; alCambiarCapturaCargos();" style="color:#6b21a8;">${mesTxt}</a>
+                            <span>${fmtMxn(total)}</span></div>`;
+                    filas.forEach(r => {
+                        html += `<div style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem; padding:3px 0; border-top:1px solid #f1f1f1;">
+                            <span>${nombres[r.cargo_tipo_id] || 'Categoría ' + r.cargo_tipo_id}</span>
+                            <span>${fmtMxn(Number(r.monto))} <button type="button" onclick="borrarCargoMensual(${r.id})" style="background:#dc2626; padding:2px 7px; font-size:0.72rem;">✕</button></span></div>`;
+                    });
+                    html += '</div>';
+                });
+                cont.innerHTML = html;
+            } catch (err) {
+                cont.innerHTML = '<p style="color:#b91c1c;">Error al cargar el historial: ' + err.message + '</p>';
+            }
+        }
+
+        async function borrarCargoMensual(id) {
+            if (!confirm('¿Borrar este cargo?')) return;
+            try {
+                const { error } = await supabaseClient.from('cargos_mensuales').delete().eq('id', id);
+                if (error) throw error;
+                await alCambiarCapturaCargos();
+            } catch (err) {
+                alert('Error al borrar: ' + err.message);
             }
         }
 
@@ -3043,7 +3114,7 @@
         function abrirConfiguracion(tab) {
             cerrarMenuReportes();
             document.getElementById('modal-config').classList.remove('oculto');
-            cambiarTabConfig(tab || 'captura');
+            cambiarTabConfig(tab || 'dicc');
         }
 
         function cerrarConfiguracion() {
