@@ -672,6 +672,7 @@
 
         <div class="sb-grupo">Rentabilidad</div>
         <button type="button" class="nav-rep" data-rep="rentabilidad" onclick="abrirPantallaReporte('rentabilidad')">📊 Analizar rentabilidad</button>
+        <button type="button" class="nav-rep" onclick="abrirConfiguracion('captura')">📝 Cargos retail</button>
 
         <div class="sb-grupo">Configuración</div>
         <button type="button" class="nav-rep nav-rep-config" onclick="abrirConfiguracion()">⚙️ Configuración</button>
@@ -1266,6 +1267,7 @@
             // Si se llegó desde otra página (p. ej. el mapa) con ?rep=..., abre esa pantalla directamente
             const repParam = new URLSearchParams(location.search).get('rep');
             if (repParam === 'configuracion') abrirConfiguracion();
+            else if (repParam === 'cargos-retail') abrirConfiguracion('captura');
             else if (repParam && document.getElementById('rep-' + repParam)) abrirPantallaReporte(repParam);
         }
 
