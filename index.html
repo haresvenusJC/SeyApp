@@ -559,11 +559,9 @@
                 btnLogin.disabled = true;
 
                 try {
+                    // Login por funcion RPC: la tabla usuarios_bo no es legible con la llave anon
                     const { data, error } = await supabaseClient
-                        .from('usuarios_bo')
-                        .select('*')
-                        .eq('usuario', user)
-                        .eq('password', pass);
+                        .rpc('login_usuario_bo', { p_usuario: user, p_password: pass });
 
                     if (error) throw error;
 

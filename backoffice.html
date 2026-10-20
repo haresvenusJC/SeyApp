@@ -1036,15 +1036,12 @@
             errorMsg.style.display = 'none';
 
             try {
-                // Consulta la tabla 'usuarios_bo' verificando credenciales
-                const { data, error } = await supabaseClient
-                    .from('usuarios_bo')
-                    .select('*')
-                    .eq('usuario', usuarioInput)
-                    .eq('password', passwordInput)
-                    .maybeSingle();
+                // Verifica credenciales con la funcion RPC (la tabla usuarios_bo no es legible con la llave anon)
+                const { data: filas, error } = await supabaseClient
+                    .rpc('login_usuario_bo', { p_usuario: usuarioInput, p_password: passwordInput });
 
                 if (error) throw error;
+                const data = filas && filas.length ? filas[0] : null;
 
                 if (data) {
                     // Validar estrictamente si el rol es 'admin'
