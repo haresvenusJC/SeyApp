@@ -14,7 +14,7 @@ tarifa_default (cadena, tarifa) as (values ('BENAVIDES', 60), ('DEL AHORRO', 80)
 usuarios_considerados (usuario) as (values ('ricardo'), ('rigo')),
 -- Si el nombre de una cadena de sucursales no coincide con la cadena de clientes_cadenas (la que usa
 -- Analizar rentabilidad), escribe aqui la equivalencia, p. ej. ('DEL AHORRO', 'Farmacias del Ahorro').
-mapeo_manual (cadena_sucursal, cadena_cargo) as (values (null::text, null::text)),
+mapeo_manual (cadena_sucursal, cadena_cargo) as (values ('BENAVIDES', 'Farmacias Benavides'), ('HEB', 'Super Mercados Internacionales')),
 visitas_dia as (
     select s.cadena as cadena_suc,
            (v.created_at at time zone 'America/Mexico_City')::date as dia
