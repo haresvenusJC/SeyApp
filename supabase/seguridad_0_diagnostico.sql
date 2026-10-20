@@ -5,3 +5,9 @@ from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
 where n.nspname = 'public' and c.relkind = 'r'
 order by c.relrowsecurity, c.relname;
+
+-- Politicas existentes: busca las que dejan leer o escribir con la llave anon (roles {public}/{anon}, using true).
+select tablename, policyname, cmd, roles, qual as condicion, with_check
+from pg_policies
+where schemaname = 'public'
+order by tablename, cmd;
